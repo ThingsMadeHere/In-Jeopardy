@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jeopardy!</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0a0a1a;
+      min-height: 100vh;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .landing-container {
+      text-align: center;
+      max-width: 600px;
+      padding: 40px;
+    }
+
+    h1 {
+      font-size: 3rem;
+      color: #fff;
+      font-weight: 300;
+      letter-spacing: 8px;
+      margin-bottom: 50px;
+    }
+
+    .mode-selection {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+    }
+
+    .mode-card {
+      background: #111;
+      border: 1px solid #333;
+      padding: 30px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      text-decoration: none;
+      color: white;
+    }
+
+    .mode-card:hover {
+      border-color: #666;
+    }
+
+    .mode-icon {
+      font-size: 2rem;
+      margin-bottom: 15px;
+      color: #888;
+    }
+
+    .mode-title {
+      font-size: 1.5rem;
+      font-weight: 500;
+      margin-bottom: 10px;
+    }
+
+    .mode-desc {
+      font-size: 0.95rem;
+      color: #888;
+      line-height: 1.5;
+    }
+
+    .features {
+      display: none;
+    }
+
+    @media (max-width: 600px) {
+      h1 {
+        font-size: 3rem;
+      }
+      
+      .mode-card {
+        padding: 30px 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="landing-container">
+    <h1>JEOPARDY!</h1>
+    
+    <div class="mode-selection">
+      <a href="teacher.html" class="mode-card">
+        <div class="mode-icon">T</div>
+        <div class="mode-title">Teacher Mode</div>
+        <div class="mode-desc">Host the game, control the board, and see who buzzes in first. Perfect for classroom presentations.</div>
+        <div class="features">
+          <span class="feature-tag">Full Game Board</span>
+          <span class="feature-tag">Buzzer Queue</span>
+          <span class="feature-tag">Score Tracking</span>
+        </div>
+      </a>
+      
+      <a href="student.html" class="mode-card">
+        <div class="mode-icon">S</div>
+        <div class="mode-title">Student Mode</div>
+        <div class="mode-desc">Join with a room code, buzz in to answer, and use modifiers to boost your team. Play from your phone or laptop.</div>
+        <div class="features">
+          <span class="feature-tag">Simple Buzzer</span>
+          <span class="feature-tag">Team Play</span>
+          <span class="feature-tag">Power-ups</span>
+        </div>
+      </a>
+      
+      <a href="admin.html" class="mode-card">
+        <div class="mode-icon">A</div>
+        <div class="mode-title">Admin Mode</div>
+        <div class="mode-desc">Customize categories, questions, answers, and board layout. Create and manage game configurations.</div>
+        <div class="features">
+          <span class="feature-tag">Edit Questions</span>
+          <span class="feature-tag">Custom Layouts</span>
+          <span class="feature-tag">Save Configs</span>
+        </div>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

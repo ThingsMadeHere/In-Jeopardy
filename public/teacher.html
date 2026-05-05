@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jeopardy!</title>
+  <link rel="stylesheet" href="common.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>JEOPARDY!</h1>
+      <div class="score-board" id="score-board"></div>
+      <div class="admin-link">
+        <a href="/admin.html" class="btn">Admin Panel</a>
+      </div>
+    </header>
+
+    <main>
+      <div id="game-board" class="game-board"></div>
+    </main>
+
+    <div id="question-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="category-label" id="modal-category"></div>
+        <div class="value-label" id="modal-value"></div>
+        <div id="team-selection" class="team-selection hidden"></div>
+        <div class="question-text" id="modal-question"></div>
+        <div class="answer-section hidden" id="answer-section">
+          <div class="answer-text" id="modal-answer"></div>
+        </div>
+        <div class="modal-buttons">
+          <button id="show-answer-btn" class="btn hidden">Show Answer</button>
+          <div class="result-buttons hidden" id="result-buttons">
+            <button id="correct-btn" class="btn correct">Correct</button>
+            <button id="wrong-btn" class="btn wrong">Wrong</button>
+          </div>
+          <button id="close-btn" class="btn close hidden">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

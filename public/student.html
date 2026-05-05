@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jeopardy! Student</title>
+  <link rel="stylesheet" href="common.css">
+  <link rel="stylesheet" href="student.css">
+</head>
+<body>
+  <div class="container">
+    <div id="join-screen" class="screen">
+      <h1>Join Jeopardy!</h1>
+      <div class="join-form">
+        <input type="text" id="room-code" placeholder="Room Code" maxlength="6">
+        <input type="text" id="team-name" placeholder="Your Name" maxlength="20">
+        <button id="join-btn" class="btn primary">Join Game</button>
+      </div>
+      <div id="join-error" class="error hidden"></div>
+    </div>
+
+    <div id="game-screen" class="screen hidden">
+      <div class="status-bar">
+        <span id="connection-status" class="status">Connected</span>
+        <span id="player-info"></span>
+      </div>
+
+      <div id="waiting-state" class="state">
+        <div class="waiting-text">Waiting for question...</div>
+      </div>
+
+      <div id="buzzing-state" class="state hidden">
+        <button id="buzzer" class="buzzer">
+          <span class="buzzer-text">BUZZ!</span>
+        </button>
+      </div>
+
+      <div id="lockedout-state" class="state hidden">
+        <div class="locked-text">Someone buzzed first!</div>
+      </div>
+
+      <div id="recording-state" class="state hidden">
+        <div class="recording-container">
+          <div class="recording-indicator">
+            <div class="recording-dot"></div>
+            <span>Recording...</span>
+          </div>
+          <div id="transcript-preview" class="transcript-preview"></div>
+          <button id="stop-recording-btn" class="btn">Stop & Submit</button>
+        </div>
+      </div>
+
+      <div class="team-score-display">
+        <span class="score-label">Team Score:</span>
+        <span id="team-score" class="score-value">$0</span>
+      </div>
+
+      <div id="modifiers-panel" class="modifiers-panel">
+        <h3>Your Modifiers</h3>
+        <div id="modifiers-list" class="modifiers-list">
+          <span class="no-modifiers">No modifiers yet</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="student.js"></script>
+</body>
+</html>
