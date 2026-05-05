@@ -129,7 +129,9 @@ function openQuestion(categoryIndex, questionIndex) {
   document.getElementById('modal-category').textContent = category.name;
   document.getElementById('modal-value').textContent = `$${currentQuestion.value}`;
   document.getElementById('modal-question').textContent = currentQuestion.question;
-  document.getElementById('modal-answer').textContent = currentQuestion.answer;
+  // Handle array or string format for answers
+  const answers = Array.isArray(currentQuestion.answer) ? currentQuestion.answer : [currentQuestion.answer];
+  document.getElementById('modal-answer').textContent = answers.join(' • ');
   
   // Reset answering team and check buzz queue
   answeringTeam = null;
@@ -444,7 +446,9 @@ function openQuestion(categoryIndex, questionIndex) {
   document.getElementById('modal-category').textContent = category.name;
   document.getElementById('modal-value').textContent = `$${currentQuestion.value}`;
   document.getElementById('modal-question').textContent = currentQuestion.question;
-  document.getElementById('modal-answer').textContent = currentQuestion.answer;
+  // Handle array or string format for answers
+  const answers = Array.isArray(currentQuestion.answer) ? currentQuestion.answer : [currentQuestion.answer];
+  document.getElementById('modal-answer').textContent = answers.join(' • ');
   
   // Wait for buzzes or auto-select if queue has entries
   if (buzzQueue.length > 0) {

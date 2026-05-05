@@ -77,61 +77,61 @@ const defaultGameData = {
     {
       name: "SCIENCE",
       questions: [
-        { value: 200, question: "This planet is known as the Red Planet", answer: "What is Mars?" },
-        { value: 400, question: "H2O is the chemical formula for this substance", answer: "What is water?" },
-        { value: 600, question: "The speed of light is approximately 300,000 of these per second", answer: "What are kilometers?" },
-        { value: 800, question: "This organelle is known as the powerhouse of the cell", answer: "What is the mitochondria?" },
-        { value: 1000, question: "Einstein's famous equation E=mc² relates energy to this property", answer: "What is mass?" }
+        { value: 200, question: "This planet is known as the Red Planet", answer: ["What is Mars?", "Mars", "The Red Planet", "Planet Mars"] },
+        { value: 400, question: "H2O is the chemical formula for this substance", answer: ["What is water?", "Water", "H2O"] },
+        { value: 600, question: "The speed of light is approximately 300,000 of these per second", answer: ["What are kilometers?", "Kilometers", "Kilometer", "km"] },
+        { value: 800, question: "This organelle is known as the powerhouse of the cell", answer: ["What is the mitochondria?", "Mitochondria", "The mitochondria"] },
+        { value: 1000, question: "Einstein's famous equation E=mc² relates energy to this property", answer: ["What is mass?", "Mass"] },
       ]
     },
     {
       name: "HISTORY",
       questions: [
-        { value: 200, question: "This war lasted from 1939 to 1945", answer: "What is World War II?" },
-        { value: 400, question: "He was the first President of the United States", answer: "Who is George Washington?" },
-        { value: 600, question: "The Berlin Wall fell in this year", answer: "What is 1989?" },
-        { value: 800, question: "This Egyptian pharaoh's tomb was discovered in 1922 by Howard Carter", answer: "Who is Tutankhamun?" },
-        { value: 1000, question: "This document was signed in 1215 and limited the power of the English monarchy", answer: "What is the Magna Carta?" }
+        { value: 200, question: "This war lasted from 1939 to 1945", answer: ["What is World War II?", "World War II", "WWII", "WW2", "Second World War"] },
+        { value: 400, question: "He was the first President of the United States", answer: ["Who is George Washington?", "George Washington", "Washington"] },
+        { value: 600, question: "The Berlin Wall fell in this year", answer: ["What is 1989?", "1989"] },
+        { value: 800, question: "This Egyptian pharaoh's tomb was discovered in 1922 by Howard Carter", answer: ["Who is Tutankhamun?", "Tutankhamun", "King Tut"] },
+        { value: 1000, question: "This document was signed in 1215 and limited the power of the English monarchy", answer: ["What is the Magna Carta?", "Magna Carta"] },
       ]
     },
     {
       name: "SPORTS",
       questions: [
-        { value: 200, question: "This sport uses a bat and ball with bases", answer: "What is baseball?" },
-        { value: 400, question: "This country hosted the 2020 Summer Olympics", answer: "What is Japan?" },
-        { value: 600, question: "A touchdown in American football is worth this many points", answer: "What is 6?" },
-        { value: 800, question: "This tennis Grand Slam is played on clay courts", answer: "What is the French Open?" },
-        { value: 1000, question: "Michael Jordan won 6 NBA championships with this team", answer: "What are the Chicago Bulls?" }
+        { value: 200, question: "This sport uses a bat and ball with bases", answer: ["What is baseball?", "Baseball"] },
+        { value: 400, question: "This country hosted the 2020 Summer Olympics", answer: ["What is Japan?", "Japan"] },
+        { value: 600, question: "A touchdown in American football is worth this many points", answer: ["What is 6?", "6", "Six", "Six points", "6 points"] },
+        { value: 800, question: "This tennis Grand Slam is played on clay courts", answer: ["What is the French Open?", "French Open", "Roland Garros"] },
+        { value: 1000, question: "Michael Jordan won 6 NBA championships with this team", answer: ["What are the Chicago Bulls?", "Chicago Bulls", "The Bulls"] },
       ]
     },
     {
       name: "LITERATURE",
       questions: [
-        { value: 200, question: "He wrote Romeo and Juliet", answer: "Who is William Shakespeare?" },
-        { value: 400, question: "This J.K. Rowling series features a boy wizard", answer: "What is Harry Potter?" },
-        { value: 600, question: "This George Orwell novel features Big Brother", answer: "What is 1984?" },
-        { value: 800, question: "The Great Gatsby was written by this author", answer: "Who is F. Scott Fitzgerald?" },
-        { value: 1000, question: "This epic poem by Homer follows Odysseus' journey home", answer: "What is The Odyssey?" }
+        { value: 200, question: "He wrote Romeo and Juliet", answer: ["Who is William Shakespeare?", "William Shakespeare", "Shakespeare"] },
+        { value: 400, question: "This J.K. Rowling series features a boy wizard", answer: ["What is Harry Potter?", "Harry Potter"] },
+        { value: 600, question: "This George Orwell novel features Big Brother", answer: ["What is 1984?", "1984", "Nineteen Eighty-Four"] },
+        { value: 800, question: "The Great Gatsby was written by this author", answer: ["Who is F. Scott Fitzgerald?", "F. Scott Fitzgerald", "Scott Fitzgerald", "Fitzgerald"] },
+        { value: 1000, question: "This epic poem by Homer follows Odysseus' journey home", answer: ["What is The Odyssey?", "The Odyssey", "Odyssey"] },
       ]
     },
     {
       name: "GEOGRAPHY",
       questions: [
-        { value: 200, question: "This is the largest ocean on Earth", answer: "What is the Pacific Ocean?" },
-        { value: 400, question: "This is the capital of France", answer: "What is Paris?" },
-        { value: 600, question: "This river is the longest in the world", answer: "What is the Nile?" },
-        { value: 800, question: "This country has the most natural lakes", answer: "What is Canada?" },
-        { value: 1000, question: "Mount Everest is located in this mountain range", answer: "What are the Himalayas?" }
+        { value: 200, question: "This is the largest ocean on Earth", answer: ["What is the Pacific Ocean?", "Pacific Ocean", "The Pacific"] },
+        { value: 400, question: "This is the capital of France", answer: ["What is Paris?", "Paris"] },
+        { value: 600, question: "This river is the longest in the world", answer: ["What is the Nile?", "The Nile", "Nile River", "Nile"] },
+        { value: 800, question: "This country has the most natural lakes", answer: ["What is Canada?", "Canada"] },
+        { value: 1000, question: "Mount Everest is located in this mountain range", answer: ["What are the Himalayas?", "The Himalayas", "Himalayas", "Himalaya Mountains"] },
       ]
     },
     {
       name: "MOVIES",
       questions: [
-        { value: 200, question: "This 1997 movie features Jack and Rose on a sinking ship", answer: "What is Titanic?" },
-        { value: 400, question: "This superhero wears a bat costume and fights crime in Gotham", answer: "Who is Batman?" },
-        { value: 600, question: "This animated movie features a lion cub named Simba", answer: "What is The Lion King?" },
-        { value: 800, question: "The Lord of the Rings movies were directed by this New Zealand filmmaker", answer: "Who is Peter Jackson?" },
-        { value: 1000, question: "This 1994 movie starring Tom Hanks follows a man's extraordinary life", answer: "What is Forrest Gump?" }
+        { value: 200, question: "This 1997 movie features Jack and Rose on a sinking ship", answer: ["What is Titanic?", "Titanic"] },
+        { value: 400, question: "This superhero wears a bat costume and fights crime in Gotham", answer: ["Who is Batman?", "Batman", "The Batman", "Bruce Wayne"] },
+        { value: 600, question: "This animated movie features a lion cub named Simba", answer: ["What is The Lion King?", "The Lion King", "Lion King"] },
+        { value: 800, question: "The Lord of the Rings movies were directed by this New Zealand filmmaker", answer: ["Who is Peter Jackson?", "Peter Jackson"] },
+        { value: 1000, question: "This 1994 movie starring Tom Hanks follows a man's extraordinary life", answer: ["What is Forrest Gump?", "Forrest Gump"] }
       ]
     }
   ]
