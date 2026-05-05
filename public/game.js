@@ -333,7 +333,8 @@ function checkGameComplete() {
 }
 
 function setupWebSocket() {
-  const WS_URL = `ws://${window.location.host}`;
+  // Configuration - Update this with your public IP or domain
+  const WS_URL = 'ws://YOUR_PUBLIC_IP:3000';
   ws = new WebSocket(WS_URL);
 
   ws.onopen = () => {

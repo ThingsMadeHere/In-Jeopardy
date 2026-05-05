@@ -3,27 +3,105 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 const http = require('http');
 const { v4: uuidv4 } = require('uuid');
-const multer = require('multer');
 const fs = require('fs');
+const { pipeline, env } = require('@xenova/transformers');
+
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+const PORT = 3000;
+const SIMILARITY_THRESHOLD = 0.5; // Threshold for semantic similarity match
+const EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
+
+// Disable local model loading to use remote models
+env.allowLocalModels = false;
+env.useBrowserCache = true;
+
+// ============================================================================
+// EXPRESS & WEBSOCKET SETUP
+// ============================================================================
+
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
-const PORT = 3000;
 
-// Audio upload setup
-const upload = multer({ dest: 'uploads/' });
+app.use(express.static('public'));
+app.use(express.json());
 
-// Calculate similarity against multiple acceptable answers, return best match
-function calculateBestSimilarity(transcript, acceptableAnswers) {
-  // Handle both single string and array of answers
+// ============================================================================
+// EMBEDDING MODEL MANAGEMENT
+// ============================================================================
+
+let embeddingPipeline = null;
+
+/**
+ * Initialize the embedding pipeline for semantic similarity
+ */
+async function initializeEmbeddingModel() {
+  if (!embeddingPipeline) {
+    try {
+      console.log('Loading embedding model...');
+      embeddingPipeline = await pipeline(
+        'feature-extraction',
+        EMBEDDING_MODEL,
+        { quantized: true }
+      );
+      console.log('Embedding model loaded successfully');
+    } catch (error) {
+      console.error('Failed to load embedding model:', error);
+      throw error;
+    }
+  }
+  return embeddingPipeline;
+}
+
+/**
+ * Compute embeddings for text using the transformer model
+ */
+async function computeEmbedding(text) {
+  const pipe = await initializeEmbeddingModel();
+  const output = await pipe(text, { pooling: 'mean', normalize: true });
+  return Array.from(output.data);
+}
+
+/**
+ * Calculate cosine similarity between two vectors
+ */
+function cosineSimilarity(vec1, vec2) {
+  let dotProduct = 0;
+  let norm1 = 0;
+  let norm2 = 0;
+  
+  for (let i = 0; i < vec1.length; i++) {
+    dotProduct += vec1[i] * vec2[i];
+    norm1 += vec1[i] * vec1[i];
+    norm2 += vec2[i] * vec2[i];
+  }
+  
+  if (norm1 === 0 || norm2 === 0) return 0;
+  
+  return dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
+}
+
+/**
+ * Calculate best embedding similarity against multiple acceptable answers
+ * Returns the highest similarity score and the best matching answer
+ */
+async function calculateBestEmbeddingSimilarity(transcript, acceptableAnswers) {
   const answers = Array.isArray(acceptableAnswers) ? acceptableAnswers : [acceptableAnswers];
   
   let bestSimilarity = 0;
   let bestMatch = '';
   
+  const transcriptEmbedding = await computeEmbedding(transcript);
+  
   for (const answer of answers) {
     if (!answer) continue;
-    const similarity = calculateSimilarity(transcript, answer);
+    
+    const answerEmbedding = await computeEmbedding(answer);
+    const similarity = cosineSimilarity(transcriptEmbedding, answerEmbedding);
+    
     if (similarity > bestSimilarity) {
       bestSimilarity = similarity;
       bestMatch = answer;
@@ -33,35 +111,12 @@ function calculateBestSimilarity(transcript, acceptableAnswers) {
   return { similarity: bestSimilarity, bestMatch };
 }
 
-// Simple similarity using Levenshtein distance
-function calculateSimilarity(text1, text2) {
-  const s1 = text1.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const s2 = text2.toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!s1 || !s2) return 0;
-  
-  const longer = s1.length > s2.length ? s1 : s2;
-  const shorter = s1.length > s2.length ? s2 : s1;
-  
-  const distance = levenshteinDistance(longer, shorter);
-  return (longer.length - distance) / longer.length;
-}
-
-function levenshteinDistance(s1, s2) {
-  const matrix = [];
-  for (let i = 0; i <= s2.length; i++) matrix[i] = [i];
-  for (let j = 0; j <= s1.length; j++) matrix[0][j] = j;
-  
-  for (let i = 1; i <= s2.length; i++) {
-    for (let j = 1; j <= s1.length; j++) {
-      matrix[i][j] = s2[i-1] === s1[j-1] 
-        ? matrix[i-1][j-1]
-        : Math.min(matrix[i-1][j-1] + 1, matrix[i][j-1] + 1, matrix[i-1][j] + 1);
-    }
-  }
-  return matrix[s2.length][s1.length];
-}
+// ============================================================================
+// GAME DATA & STATE MANAGEMENT
+// ============================================================================
 
 const rooms = new Map();
+
 const MODIFIERS = [
   { name: 'Double', id: 'double', icon: 'x2', description: 'Next correct answer worth double points' },
   { name: 'Steal', id: 'steal', icon: 'ST', description: 'Steal points from another team' },
@@ -69,9 +124,6 @@ const MODIFIERS = [
   { name: 'Bank', id: 'bank', icon: 'BK', description: 'Bank your streak bonus immediately' }
 ];
 
-app.use(express.static('public'));
-
-// Default game data (immutable reference)
 const defaultGameData = {
   categories: [
     {
@@ -137,37 +189,67 @@ const defaultGameData = {
   ]
 };
 
-// Active game data (can be modified via admin)
 let gameData = { ...defaultGameData };
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+function createRoom(code) {
+  return {
+    code,
+    teacher: null,
+    students: new Map(),
+    teams: [[], [], []],
+    state: 'waiting',
+    buzzQueue: [],
+    currentQuestion: null
+  };
+}
+
+function findRoomByPlayer(playerName) {
+  for (const room of rooms.values()) {
+    for (const student of room.students.values()) {
+      if (student.name === playerName) {
+        return room;
+      }
+    }
+  }
+  return null;
+}
+
+function send(ws, type, data) {
+  ws.send(JSON.stringify({ type, ...data }));
+}
+
+function broadcastToRoom(roomCode, message, target = 'all') {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+  
+  const msg = JSON.stringify(message);
+  const sendIfOpen = (ws) => ws?.readyState === 1 && ws.send(msg);
+  
+  if (target !== 'student' && room.teacher) sendIfOpen(room.teacher.ws);
+  if (target !== 'teacher') room.students.forEach(s => sendIfOpen(s.ws));
+}
+
+function clearBuzzQueue(roomCode) {
+  rooms.get(roomCode)?.buzzQueue?.splice(0);
+}
+
+// ============================================================================
+// API ROUTES - GAME DATA
+// ============================================================================
 
 app.get('/api/game', (req, res) => {
   res.json(gameData);
 });
 
-// Set active configuration
-app.post('/api/admin/activate', express.json(), (req, res) => {
-  try {
-    const { name } = req.body;
-    if (!name) {
-      return res.status(400).json({ error: 'Configuration name required' });
-    }
-    
-    const configFile = path.join(configsPath, `${name}.json`);
-    if (!fs.existsSync(configFile)) {
-      return res.status(404).json({ error: 'Configuration not found' });
-    }
-    
-    const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
-    gameData = config;
-    res.json({ success: true, name });
-  } catch (err) {
-    console.error('Failed to activate config:', err);
-    res.status(500).json({ error: 'Failed to activate configuration' });
-  }
-});
+// ============================================================================
+// API ROUTES - ANSWER SUBMISSION
+// ============================================================================
 
-// Answer submission endpoint - accepts transcript from client
-app.post('/api/submit-answer', express.json(), async (req, res) => {
+app.post('/api/submit-answer', async (req, res) => {
   try {
     const { team, player, questionValue, transcript } = req.body;
     
@@ -175,21 +257,15 @@ app.post('/api/submit-answer', express.json(), async (req, res) => {
       return res.status(400).json({ error: 'No transcript received' });
     }
     
-    // Find the room and get the current question's correct answer
     const room = findRoomByPlayer(player);
     if (!room || !room.currentQuestion) {
       return res.status(400).json({ error: 'No active question' });
     }
     
     const acceptableAnswers = room.currentQuestion.correctAnswer;
+    const { similarity, bestMatch } = await calculateBestEmbeddingSimilarity(transcript, acceptableAnswers);
+    const isCorrect = similarity >= SIMILARITY_THRESHOLD;
     
-    // Calculate best similarity against all acceptable answers
-    const { similarity, bestMatch } = calculateBestSimilarity(transcript, acceptableAnswers);
-    
-    // Threshold for "close enough" (0.7 = 70% similar)
-    const isCorrect = similarity >= 0.7;
-    
-    // Send result to teacher via WebSocket
     if (room.teacher) {
       send(room.teacher.ws, 'answer-verified', {
         team: parseInt(team),
@@ -210,15 +286,26 @@ app.post('/api/submit-answer', express.json(), async (req, res) => {
   }
 });
 
-// Admin endpoints for game configuration
+// ============================================================================
+// API ROUTES - ROOM MANAGEMENT
+// ============================================================================
+
+app.post('/api/room', (req, res) => {
+  const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+  rooms.set(roomCode, createRoom(roomCode));
+  res.json({ roomCode });
+});
+
+// ============================================================================
+// API ROUTES - ADMIN CONFIGURATION
+// ============================================================================
+
 const configsPath = path.join(__dirname, 'configs');
 
-// Ensure configs directory exists
 if (!fs.existsSync(configsPath)) {
   fs.mkdirSync(configsPath, { recursive: true });
 }
 
-// Get list of saved configurations
 app.get('/api/admin/configs', (req, res) => {
   try {
     const files = fs.readdirSync(configsPath).filter(f => f.endsWith('.json'));
@@ -230,7 +317,6 @@ app.get('/api/admin/configs', (req, res) => {
   }
 });
 
-// Get specific configuration
 app.get('/api/admin/config/:name', (req, res) => {
   try {
     const configName = req.params.name;
@@ -248,8 +334,7 @@ app.get('/api/admin/config/:name', (req, res) => {
   }
 });
 
-// Save configuration
-app.post('/api/admin/save', express.json(), (req, res) => {
+app.post('/api/admin/save', (req, res) => {
   try {
     const { name, config } = req.body;
     if (!name || !config) {
@@ -265,7 +350,6 @@ app.post('/api/admin/save', express.json(), (req, res) => {
   }
 });
 
-// Delete configuration
 app.delete('/api/admin/config/:name', (req, res) => {
   try {
     const configName = req.params.name;
@@ -282,111 +366,34 @@ app.delete('/api/admin/config/:name', (req, res) => {
   }
 });
 
-// Get default configuration
+app.post('/api/admin/activate', (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Configuration name required' });
+    }
+    
+    const configFile = path.join(configsPath, `${name}.json`);
+    if (!fs.existsSync(configFile)) {
+      return res.status(404).json({ error: 'Configuration not found' });
+    }
+    
+    const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+    gameData = config;
+    res.json({ success: true, name });
+  } catch (err) {
+    console.error('Failed to activate config:', err);
+    res.status(500).json({ error: 'Failed to activate configuration' });
+  }
+});
+
 app.get('/api/admin/default', (req, res) => {
   res.json({ categories: defaultGameData.categories });
 });
 
-// Helper to find room by player name
-function findRoomByPlayer(playerName) {
-  for (const room of rooms.values()) {
-    for (const student of room.students.values()) {
-      if (student.name === playerName) {
-        return room;
-      }
-    }
-  }
-  return null;
-}
-
-app.post('/api/room', (req, res) => {
-  const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-  rooms.set(roomCode, {
-    code: roomCode,
-    teacher: null,
-    students: new Map(),
-    teams: [[], [], []],
-    state: 'waiting',
-    currentQuestion: null,
-    buzzQueue: []
-  });
-  res.json({ roomCode });
-});
-
-wss.on('connection', (ws) => {
-  let clientInfo = { ws, role: null, room: null };
-
-  ws.on('message', (message) => {
-    try {
-      const data = JSON.parse(message);
-      handleMessage(data, clientInfo);
-    } catch (err) {
-      console.error('Invalid message:', err);
-    }
-  });
-
-  ws.on('close', () => {
-    if (clientInfo.room && clientInfo.role) {
-      handleDisconnect(clientInfo);
-    }
-  });
-});
-
-const HANDLERS = {
-  'teacher-join': handleTeacherJoin,
-  'join': handleStudentJoin,
-  'buzz': handleBuzz,
-  'question-open': handleQuestionOpen,
-  'question-close': (data, client) => { clearBuzzQueue(client.room); broadcastToRoom(client.room, { type: 'question-close' }, 'student'); },
-  'use-modifier': handleUseModifier,
-  'grant-modifier': handleGrantModifier,
-  'team-state': handleTeamState,
-  'broadcast-result': handleBroadcastResult
-};
-
-function handleMessage(data, clientInfo) {
-  const handler = HANDLERS[data.type];
-  if (handler) handler(data, clientInfo);
-}
-
-function createRoom(code) {
-  return {
-    code,
-    teacher: null,
-    students: new Map(),
-    teams: [[], [], []],
-    state: 'waiting',
-    buzzQueue: [],
-    currentQuestion: null
-  };
-}
-
-function handleQuestionOpen(data, clientInfo) {
-  const room = rooms.get(clientInfo.room);
-  if (room) {
-    room.currentQuestion = {
-      value: data.questionValue,
-      correctAnswer: data.correctAnswer
-    };
-    broadcastToRoom(clientInfo.room, { 
-      type: 'question-open',
-      questionValue: data.questionValue 
-    }, 'student');
-  }
-}
-
-function handleBroadcastResult(data, clientInfo) {
-  broadcastToRoom(clientInfo.room, {
-    type: 'answer-result',
-    player: data.player,
-    transcript: data.transcript,
-    isCorrect: data.isCorrect
-  }, 'student');
-}
-
-function send(ws, type, data) {
-  ws.send(JSON.stringify({ type, ...data }));
-}
+// ============================================================================
+// WEBSOCKET MESSAGE HANDLERS
+// ============================================================================
 
 function handleTeacherJoin(data, clientInfo) {
   const roomCode = data.roomCode || Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -403,7 +410,6 @@ function handleStudentJoin(data, clientInfo) {
   const room = rooms.get(data.roomCode);
   if (!room) return send(clientInfo.ws, 'join-error', { message: 'Room not found' });
   
-  // Assign to team with fewest players
   const teamSizes = room.teams.map(t => t.length);
   const minSize = Math.min(...teamSizes);
   const availableTeams = teamSizes.map((size, i) => size === minSize ? i : null).filter(i => i !== null);
@@ -427,6 +433,29 @@ function handleBuzz(data, clientInfo) {
   room.buzzQueue.push({ team: data.team, player: data.player, time: Date.now() });
   broadcastToRoom(room.code, { type: 'buzz-accepted', team: data.team, player: data.player, position: room.buzzQueue.length }, 'all');
   if (room.teacher) send(room.teacher.ws, 'buzz-queue', { queue: room.buzzQueue });
+}
+
+function handleQuestionOpen(data, clientInfo) {
+  const room = rooms.get(clientInfo.room);
+  if (room) {
+    room.currentQuestion = {
+      value: data.questionValue,
+      correctAnswer: data.correctAnswer
+    };
+    broadcastToRoom(clientInfo.room, { 
+      type: 'question-open',
+      questionValue: data.questionValue 
+    }, 'student');
+  }
+}
+
+function handleBroadcastResult(data, clientInfo) {
+  broadcastToRoom(clientInfo.room, {
+    type: 'answer-result',
+    player: data.player,
+    transcript: data.transcript,
+    isCorrect: data.isCorrect
+  }, 'student');
 }
 
 function handleUseModifier(data, clientInfo) {
@@ -475,20 +504,52 @@ function handleDisconnect(clientInfo) {
   }
 }
 
-function broadcastToRoom(roomCode, message, target = 'all') {
-  const room = rooms.get(roomCode);
-  if (!room) return;
-  
-  const msg = JSON.stringify(message);
-  const sendIfOpen = (ws) => ws?.readyState === 1 && ws.send(msg);
-  
-  if (target !== 'student' && room.teacher) sendIfOpen(room.teacher.ws);
-  if (target !== 'teacher') room.students.forEach(s => sendIfOpen(s.ws));
+// ============================================================================
+// WEBSOCKET SERVER SETUP
+// ============================================================================
+
+const HANDLERS = {
+  'teacher-join': handleTeacherJoin,
+  'join': handleStudentJoin,
+  'buzz': handleBuzz,
+  'question-open': handleQuestionOpen,
+  'question-close': (data, client) => {
+    clearBuzzQueue(client.room);
+    broadcastToRoom(client.room, { type: 'question-close' }, 'student');
+  },
+  'use-modifier': handleUseModifier,
+  'grant-modifier': handleGrantModifier,
+  'team-state': handleTeamState,
+  'broadcast-result': handleBroadcastResult
+};
+
+function handleMessage(data, clientInfo) {
+  const handler = HANDLERS[data.type];
+  if (handler) handler(data, clientInfo);
 }
 
-function clearBuzzQueue(roomCode) {
-  rooms.get(roomCode)?.buzzQueue?.splice(0);
-}
+wss.on('connection', (ws) => {
+  let clientInfo = { ws, role: null, room: null };
+
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      handleMessage(data, clientInfo);
+    } catch (err) {
+      console.error('Invalid message:', err);
+    }
+  });
+
+  ws.on('close', () => {
+    if (clientInfo.room && clientInfo.role) {
+      handleDisconnect(clientInfo);
+    }
+  });
+});
+
+// ============================================================================
+// SERVER STARTUP
+// ============================================================================
 
 server.listen(PORT, () => {
   console.log(`Jeopardy server running at http://localhost:${PORT}`);

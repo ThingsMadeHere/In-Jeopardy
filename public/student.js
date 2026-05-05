@@ -1,4 +1,5 @@
-const WS_URL = `ws://${window.location.host}`;
+// Configuration - Update this with your public IP or domain
+const WS_URL = 'ws://YOUR_PUBLIC_IP:3000';
 let ws = null;
 let currentState = 'waiting';
 let myTeam = null;
