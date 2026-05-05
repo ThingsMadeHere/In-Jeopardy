@@ -333,8 +333,8 @@ function checkGameComplete() {
 }
 
 function setupWebSocket() {
-  // Configuration - Update this with your public IP or domain
-  const WS_URL = 'ws://YOUR_PUBLIC_IP:3000';
+  // Configuration - Update this with your ngrok URL (e.g., 'wss://abc123.ngrok.io')
+  const WS_URL = 'wss://YOUR_NGROK_URL.ngrok.io';
   ws = new WebSocket(WS_URL);
 
   ws.onopen = () => {
