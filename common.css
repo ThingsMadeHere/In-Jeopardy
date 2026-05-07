@@ -1,0 +1,130 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #0a0a1a;
+  min-height: 100vh;
+  color: white;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+header h1 {
+  font-size: 2rem;
+  font-weight: 300;
+  letter-spacing: 4px;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.btn {
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-weight: 500;
+  border: 1px solid #333;
+  background: #111;
+  color: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.btn:hover {
+  border-color: #666;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #111;
+  padding: 30px;
+  border: 1px solid #333;
+  max-width: 800px;
+  width: 90%;
+  text-align: center;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes feedbackFloat {
+  0% { opacity: 0; transform: translate(-50%, 0%) scale(0.3); }
+  15% { opacity: 1; transform: translate(-50%, -20%) scale(1.3); }
+  30% { transform: translate(-50%, -30%) scale(1.1); }
+  70% { opacity: 1; transform: translate(-50%, -40%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -60%) scale(0.9); }
+}
+
+.score-feedback {
+  position: fixed;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, 0);
+  font-size: 6rem;
+  font-weight: 900;
+  text-shadow: 0 0 30px currentColor, 0 0 60px currentColor, 0 0 90px rgba(0,0,0,0.5);
+  animation: feedbackFloat 2.5s ease-out forwards;
+  pointer-events: none;
+  z-index: 9999;
+  letter-spacing: 4px;
+}
+
+.modifier-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #111;
+  border: 1px solid #333;
+  padding: 15px;
+  text-align: center;
+  animation: slideIn 0.3s ease-out;
+  z-index: 2000;
+  min-width: 180px;
+}
+
+.mod-title {
+  font-size: 0.9rem;
+  color: #888;
+  margin-bottom: 8px;
+}
+
+.mod-badge {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.mod-name {
+  font-size: 1rem;
+  font-weight: 500;
+  margin-bottom: 3px;
+}
+
+.mod-desc {
+  font-size: 0.8rem;
+  color: #666;
+}
