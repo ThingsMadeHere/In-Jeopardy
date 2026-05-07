@@ -421,36 +421,62 @@ function openQuestion(categoryIndex, questionIndex) {
 }
 
 function handleAnswerVerified(data) {
-  // Show answer section immediately so teacher can see what was being asked
+  // Show answer section so teacher can manually grade
   document.getElementById('answer-section').classList.remove('hidden');
   document.getElementById('show-answer-btn').classList.add('hidden');
-  document.getElementById('result-buttons').classList.add('hidden');
+  document.getElementById('result-buttons').classList.remove('hidden');
   
-  // Auto-score based on similarity result
-  answeringTeam = TEAMS[data.team];
-  if (data.isCorrect) {
-    handleCorrectAnswer();
-    showFeedback(`${data.player} correct! (${Math.round(data.similarity * 100)}% match)`, '#00ff00');
-  } else {
-    handleWrongAnswer();
-    showFeedback(`${data.player} wrong (${Math.round(data.similarity * 100)}% match)`, '#ff4444');
-  }
+  // Set up manual grading buttons
+  const correctBtn = document.getElementById('correct-btn');
+  const wrongBtn = document.getElementById('wrong-btn');
   
-  // Mark question as answered
-  if (currentQuestion) {
-    markQuestionAnswered();
-  }
+  // Remove old listeners and add new ones with current data
+  correctBtn.replaceWith(correctBtn.cloneNode(true));
+  wrongBtn.replaceWith(wrongBtn.cloneNode(true));
   
-  // Notify all clients of result
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({
-      type: 'broadcast-result',
-      player: data.player,
-      transcript: data.transcript,
-      isCorrect: data.isCorrect
-    }));
-  }
+  document.getElementById('correct-btn').addEventListener('click', () => {
+    submitManualGrade(data.team, data.player, data.questionValue, true);
+  });
+  
+  document.getElementById('wrong-btn').addEventListener('click', () => {
+    submitManualGrade(data.team, data.player, data.questionValue, false);
+  });
+  
+  // Show transcript for teacher review
+  const answerSection = document.getElementById('answer-section');
+  answerSection.innerHTML = `
+    <h4>Student Answer</h4>
+    <p><strong>Player:</strong> ${data.player}</p>
+    <p><strong>Response:</strong> ${data.transcript}</p>
+    <p class="manual-grade-prompt">Teacher: Click Correct or Wrong to grade</p>
+  `;
+}
 
-  // Close modal after 3 seconds to hide the Correct/Wrong buttons
-  setTimeout(() => closeModal(), 3000);
+async function submitManualGrade(team, player, questionValue, isCorrect) {
+  try {
+    await fetch('/api/verify-answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ team, player, questionValue, isCorrect })
+    });
+    
+    // Apply score locally
+    answeringTeam = TEAMS[team];
+    if (isCorrect) {
+      handleCorrectAnswer();
+      showFeedback(`${player} correct!`, '#00ff00');
+    } else {
+      handleWrongAnswer();
+      showFeedback(`${player} wrong`, '#ff4444');
+    }
+    
+    // Mark question as answered
+    if (currentQuestion) {
+      markQuestionAnswered();
+    }
+    
+    closeModal();
+  } catch (err) {
+    console.error('Failed to submit grade:', err);
+  }
 }

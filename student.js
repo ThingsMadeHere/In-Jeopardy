@@ -124,7 +124,8 @@ const MSG_HANDLERS = {
   'buzz-accepted': (data) => data.player === myName ? startRecording(data) : lockoutBuzzer(),
   'question-close': () => { resetBuzzer(); stopRecording(); },
   'team-state': (data) => updateTeamState(data.teams),
-  'answer-verified': (data) => handleAnswerVerification(data)
+  'answer-verified': (data) => handleAnswerVerification(data),
+  'answer-graded': (data) => handleAnswerGraded(data)
 };
 
 function handleMessage(data) {
@@ -337,8 +338,32 @@ async function submitAudio(audioBlob) {
 }
 
 function handleAnswerVerification(data) {
-  // Server will send this via WebSocket after processing
-  // The teacher will receive the result and handle scoring
+  // Teacher received the answer and will manually grade it
+  const preview = document.getElementById('transcript-preview');
+  preview.textContent = 'Waiting for teacher to grade...';
+  preview.classList.add('has-text');
+}
+
+function handleAnswerGraded(data) {
+  // Notify student of the grading result
+  if (data.player === myName) {
+    const preview = document.getElementById('transcript-preview');
+    if (data.isCorrect) {
+      preview.textContent = `✓ Correct! (+$${data.questionValue})`;
+      preview.style.color = '#00ff00';
+    } else {
+      preview.textContent = `✗ Wrong (-$${data.questionValue})`;
+      preview.style.color = '#ff4444';
+    }
+    
+    // Update score display
+    updateTeamState([{ id: myTeam, score: data.isCorrect ? myTeamScore + data.questionValue : myTeamScore - data.questionValue }]);
+    
+    setTimeout(() => {
+      resetBuzzer();
+      preview.style.color = '';
+    }, 3000);
+  }
 }
 
 function lockoutBuzzer() {
