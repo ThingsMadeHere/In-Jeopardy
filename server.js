@@ -11,6 +11,7 @@ const multer = require('multer');
 // ============================================================================
 
 const PORT = 3000;
+const SIMILARITY_THRESHOLD = 0.5; // Threshold for considering an answer correct (0.0 to 1.0)
 
 // ============================================================================
 // EXPRESS & WEBSOCKET SETUP
@@ -83,6 +84,17 @@ function calculateBestTextSimilarity(transcript, acceptableAnswers) {
   }
   
   return { similarity: bestSimilarity, bestMatch };
+}
+
+/**
+ * Transcribe audio buffer to text (placeholder - returns empty string)
+ * This is a stub function that should be replaced with actual speech-to-text implementation
+ */
+async function transcribeAudio(audioBuffer) {
+  // Placeholder: In a real implementation, this would call a speech-to-text API
+  // For now, return empty string to indicate no transcription available
+  console.log('transcribeAudio called - placeholder function (no actual transcription)');
+  return '';
 }
 
 // ============================================================================

@@ -99,6 +99,7 @@ function renderBoard() {
   }
 }
 
+// First openQuestion definition (used during initial setup)
 function openQuestion(categoryIndex, questionIndex) {
   const category = gameData.categories[categoryIndex];
   currentQuestion = {
@@ -275,8 +276,9 @@ function checkGameComplete() {
 }
 
 function setupWebSocket() {
-  // Configuration - Update this with your ngrok URL (e.g., 'wss://abc123.ngrok.io')
-  const WS_URL = 'wss://zoophagous-yasmine-unblightedly.ngrok-free.app';
+  // Use relative WebSocket URL for same-origin connection
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const WS_URL = `${protocol}//${location.host}`;
   ws = new WebSocket(WS_URL);
 
   ws.onopen = () => {
@@ -376,6 +378,7 @@ function showBuzzNotification(data) {
   }
 }
 
+// Second openQuestion definition (overrides first, used after WebSocket is connected)
 function openQuestion(categoryIndex, questionIndex) {
   const category = gameData.categories[categoryIndex];
   currentQuestion = {
