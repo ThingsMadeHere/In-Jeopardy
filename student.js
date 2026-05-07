@@ -1,5 +1,9 @@
-// Configuration - Update this with your ngrok URL (e.g., 'wss://abc123.ngrok.io')
-const WS_URL = 'wss://zoophagous-yasmine-unblightedly.ngrok-free.app';
+// Configuration - Use relative WebSocket URL for same-origin connection
+const getWsUrl = () => {
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${location.host}`;
+};
+const WS_URL = getWsUrl();
 const DEFAULT_ROOM = 'GAME';
 let ws = null;
 let currentState = 'waiting';
