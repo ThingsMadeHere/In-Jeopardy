@@ -93,7 +93,7 @@ function showGameScreen(data) {
   document.getElementById('join-screen').classList.add('hidden');
   document.getElementById('game-screen').classList.remove('hidden');
   
-  const teamColors = ['Red', 'Blue', 'Green'];
+  const teamColors = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange'];
   document.getElementById('player-info').textContent = `${myName} (${teamColors[myTeam]})`;
   document.getElementById('connection-status').classList.add('connected');
   updateScoreDisplay();
