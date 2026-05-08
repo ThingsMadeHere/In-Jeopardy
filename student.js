@@ -54,8 +54,12 @@ function connectWebSocket(roomCode, name) {
   };
 
   ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    handleMessage(data);
+    try {
+      const data = JSON.parse(event.data);
+      handleMessage(data);
+    } catch (e) {
+      console.error('Failed to parse WebSocket message:', event.data, e);
+    }
   };
 
   ws.onclose = () => {
@@ -92,11 +96,10 @@ function showGameScreen(data) {
   document.getElementById('player-info').textContent = `${myName} (${teamColors[myTeam]})`;
   document.getElementById('connection-status').classList.add('connected');
   updateScoreDisplay();
-  
 }
 
 function setState(state) {
-  const states = ['waiting-state', 'buzzing-state', 'lockedout-state', 'recording-state'];
+  const states = ['waiting-state', 'buzzing-state', 'lockedout-state'];
   states.forEach(id => document.getElementById(id).classList.add('hidden'));
   document.getElementById(state).classList.remove('hidden');
 }
@@ -139,8 +142,8 @@ function handleAnswerGraded(data) {
   if (data.player === myName) {
     console.log(`Answer graded: ${data.isCorrect ? 'Correct' : 'Wrong'}`);
     
-    // Update score display
-    updateTeamState([{ id: myTeam, score: data.isCorrect ? myTeamScore + data.questionValue : myTeamScore - data.questionValue }]);
+    // Update score display using the team-state message which will come separately
+    // Score is updated via team-state broadcast from server
     
     setTimeout(() => {
       resetBuzzer();
