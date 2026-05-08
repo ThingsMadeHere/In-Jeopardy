@@ -14,7 +14,6 @@ const TEAMS = [
   { id: 5, name: 'Team Orange', color: '#ff8844', score: 0, streak: 0, players: [] }
 ];
 
-let currentTeam = null;
 let answeringTeam = null;
 
 const STREAK_THRESHOLDS = [3, 5, 7];

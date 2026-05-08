@@ -11,6 +11,16 @@ const multer = require('multer');
 // ============================================================================
 
 const PORT = 3000;
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+const CONFIGS_DIR = path.join(__dirname, 'configs');
+const DEFAULT_ROOM_CODE = 'GAME';
+
+// Ensure directories exist
+[UPLOADS_DIR, CONFIGS_DIR].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
 
 // ============================================================================
 // EXPRESS & WEBSOCKET SETUP
@@ -20,43 +30,33 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// Configure multer for audio uploads with disk storage
+// Configure multer for audio uploads
 const upload = multer({ 
   storage: multer.diskStorage({
-    destination: (req, file, cb) => {
-      cb(null, uploadsDir);
-    },
+    destination: (_, __, cb) => cb(null, UPLOADS_DIR),
     filename: (req, file, cb) => {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const playerName = req.body.player || 'unknown';
-      const originalExtension = path.extname(file.originalname) || '.webm';
-      cb(null, `${playerName}-${timestamp}${originalExtension}`);
+      const ext = path.extname(file.originalname) || '.webm';
+      cb(null, `${playerName}-${timestamp}${ext}`);
     }
   }),
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024 }
 });
 
 app.use(express.static(__dirname));
 app.use(express.json());
 
 // ============================================================================
-// HELPER FUNCTIONS
+// AUDIO TRANSCRIPTION
 // ============================================================================
 
 /**
- * Transcribe audio buffer to text (placeholder - returns empty string)
- * This is a stub function that should be replaced with actual speech-to-text implementation
+ * Transcribe audio buffer to text (placeholder)
+ * Replace with actual speech-to-text implementation
  */
-async function transcribeAudio(audioBuffer) {
-  // Placeholder: In a real implementation, this would call a speech-to-text API
-  // For now, return empty string to indicate no transcription available
-  console.log('transcribeAudio called - placeholder function (no actual transcription)');
+async function transcribeAudio(_) {
+  console.log('transcribeAudio called - placeholder function');
   return '';
 }
 
@@ -224,7 +224,7 @@ const defaultGameData = {
 let gameData = { ...defaultGameData };
 
 // ============================================================================
-// HELPER FUNCTIONS
+// ROOM MANAGEMENT HELPERS
 // ============================================================================
 
 function createRoom(code) {
@@ -240,7 +240,6 @@ function createRoom(code) {
 }
 
 // Create default room on startup
-const DEFAULT_ROOM_CODE = 'GAME';
 rooms.set(DEFAULT_ROOM_CODE, createRoom(DEFAULT_ROOM_CODE));
 console.log(`Default room '${DEFAULT_ROOM_CODE}' created`);
 
@@ -288,16 +287,12 @@ app.get('/api/game', (req, res) => {
 
 app.get('/api/audio-files', (req, res) => {
   try {
-    const files = fs.readdirSync(uploadsDir)
+    const files = fs.readdirSync(UPLOADS_DIR)
       .filter(file => file.endsWith('.webm'))
       .map(file => {
-        const filePath = path.join(uploadsDir, file);
+        const filePath = path.join(UPLOADS_DIR, file);
         const stats = fs.statSync(filePath);
-        return {
-          name: file,
-          size: stats.size,
-          created: stats.birthtime
-        };
+        return { name: file, size: stats.size, created: stats.birthtime };
       })
       .sort((a, b) => b.created - a.created);
     
@@ -316,7 +311,7 @@ app.post('/api/test-transcribe', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Filename required' });
     }
     
-    const filePath = path.join(uploadsDir, filename);
+    const filePath = path.join(UPLOADS_DIR, filename);
     
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ success: false, error: 'File not found' });
@@ -325,14 +320,12 @@ app.post('/api/test-transcribe', async (req, res) => {
     console.log(`Testing transcription for: ${filename}`);
     const startTime = Date.now();
     
-    // Read and transcribe the file
     const audioBuffer = fs.readFileSync(filePath);
     const transcript = await transcribeAudio(audioBuffer);
     const processingTime = Date.now() - startTime;
     
     console.log(`Transcription result for ${filename}: "${transcript}"`);
     
-    // For manual grading, just return the transcript (if any)
     res.json({
       success: true,
       transcript: transcript || '[Manual verification needed]',
@@ -340,10 +333,7 @@ app.post('/api/test-transcribe', async (req, res) => {
     });
   } catch (error) {
     console.error('Test transcription error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -367,15 +357,12 @@ app.post('/api/submit-answer', upload.single('audio'), async (req, res) => {
     console.log(`Audio file saved: ${req.file.path}`);
     console.log(`File size: ${req.file.size} bytes`);
     
-    // Read the saved file for transcription
     const audioBuffer = fs.readFileSync(req.file.path);
     
-    // Transcribe audio (placeholder - returns empty string)
     console.log('Transcribing audio...');
     const transcript = await transcribeAudio(audioBuffer);
     console.log('Transcription result:', transcript);
     
-    // For manual grading, send transcript to teacher for verification
     if (room.teacher) {
       send(room.teacher.ws, 'answer-verified', {
         team: parseInt(team),
@@ -385,9 +372,7 @@ app.post('/api/submit-answer', upload.single('audio'), async (req, res) => {
       });
     }
     
-    res.json({ 
-      transcript: transcript || '[Manual verification needed]'
-    });
+    res.json({ transcript: transcript || '[Manual verification needed]' });
   } catch (err) {
     console.error('Error processing answer:', err);
     res.status(500).json({ error: 'Failed to process answer' });
@@ -398,7 +383,6 @@ app.post('/api/submit-answer', upload.single('audio'), async (req, res) => {
 // API ROUTES - MANUAL ANSWER VERIFICATION
 // ============================================================================
 
-// Teacher manually verifies and scores the answer
 app.post('/api/verify-answer', async (req, res) => {
   try {
     const { team, player, questionValue, isCorrect } = req.body;
@@ -410,7 +394,6 @@ app.post('/api/verify-answer', async (req, res) => {
     
     console.log(`Teacher verified answer: ${player} - ${isCorrect ? 'Correct' : 'Wrong'}`);
     
-    // Notify all clients of the result
     broadcastToRoom(room.code, {
       type: 'answer-graded',
       team: parseInt(team),
@@ -430,7 +413,6 @@ app.post('/api/verify-answer', async (req, res) => {
 // API ROUTES - ROOM MANAGEMENT
 // ============================================================================
 
-// Debug endpoint to check active rooms
 app.get('/api/debug/rooms', (req, res) => {
   const roomList = [];
   for (const [code, room] of rooms.entries()) {
@@ -455,15 +437,9 @@ app.post('/api/room', (req, res) => {
 // API ROUTES - ADMIN CONFIGURATION
 // ============================================================================
 
-const configsPath = path.join(__dirname, 'configs');
-
-if (!fs.existsSync(configsPath)) {
-  fs.mkdirSync(configsPath, { recursive: true });
-}
-
 app.get('/api/admin/configs', (req, res) => {
   try {
-    const files = fs.readdirSync(configsPath).filter(f => f.endsWith('.json'));
+    const files = fs.readdirSync(CONFIGS_DIR).filter(f => f.endsWith('.json'));
     const configs = files.map(f => ({ name: f.replace('.json', '') }));
     res.json(configs);
   } catch (err) {
@@ -474,15 +450,14 @@ app.get('/api/admin/configs', (req, res) => {
 
 app.get('/api/admin/config/:name', (req, res) => {
   try {
-    const configName = req.params.name;
-    const configFile = path.join(configsPath, `${configName}.json`);
+    const configFile = path.join(CONFIGS_DIR, `${req.params.name}.json`);
     
     if (!fs.existsSync(configFile)) {
       return res.status(404).json({ error: 'Configuration not found' });
     }
     
     const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
-    res.json({ name: configName, config });
+    res.json({ name: req.params.name, config });
   } catch (err) {
     console.error('Failed to load config:', err);
     res.status(500).json({ error: 'Failed to load configuration' });
@@ -496,7 +471,7 @@ app.post('/api/admin/save', (req, res) => {
       return res.status(400).json({ error: 'Name and config required' });
     }
     
-    const configFile = path.join(configsPath, `${name}.json`);
+    const configFile = path.join(CONFIGS_DIR, `${name}.json`);
     fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
     res.json({ success: true });
   } catch (err) {
@@ -507,8 +482,7 @@ app.post('/api/admin/save', (req, res) => {
 
 app.delete('/api/admin/config/:name', (req, res) => {
   try {
-    const configName = req.params.name;
-    const configFile = path.join(configsPath, `${configName}.json`);
+    const configFile = path.join(CONFIGS_DIR, `${req.params.name}.json`);
     
     if (fs.existsSync(configFile)) {
       fs.unlinkSync(configFile);
@@ -528,13 +502,12 @@ app.post('/api/admin/activate', (req, res) => {
       return res.status(400).json({ error: 'Configuration name required' });
     }
     
-    const configFile = path.join(configsPath, `${name}.json`);
+    const configFile = path.join(CONFIGS_DIR, `${name}.json`);
     if (!fs.existsSync(configFile)) {
       return res.status(404).json({ error: 'Configuration not found' });
     }
     
-    const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
-    gameData = config;
+    gameData = JSON.parse(fs.readFileSync(configFile, 'utf8'));
     res.json({ success: true, name });
   } catch (err) {
     console.error('Failed to activate config:', err);
@@ -589,7 +562,12 @@ function handleBuzz(data, clientInfo) {
   if (!room || room.buzzQueue.find(b => b.team === data.team)) return;
   
   room.buzzQueue.push({ team: data.team, player: data.player, time: Date.now() });
-  broadcastToRoom(room.code, { type: 'buzz-accepted', team: data.team, player: data.player, position: room.buzzQueue.length }, 'all');
+  broadcastToRoom(room.code, { 
+    type: 'buzz-accepted', 
+    team: data.team, 
+    player: data.player, 
+    position: room.buzzQueue.length 
+  }, 'all');
   if (room.teacher) send(room.teacher.ws, 'buzz-queue', { queue: room.buzzQueue });
 }
 
