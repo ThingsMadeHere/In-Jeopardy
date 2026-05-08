@@ -144,8 +144,19 @@ function selectAnsweringTeam(teamId) {
 function setupModalListeners() {
   document.getElementById('show-answer-btn').addEventListener('click', () => {
     document.getElementById('answer-section').classList.remove('hidden');
+    document.getElementById('verification-buttons').classList.remove('hidden');
     document.getElementById('show-answer-btn').classList.add('hidden');
-    // Score buttons will be shown when answer is verified
+  });
+  
+  document.getElementById('mark-correct-btn').addEventListener('click', () => {
+    handleCorrectAnswer();
+    document.getElementById('verification-buttons').classList.add('hidden');
+    document.getElementById('score-buttons').classList.remove('hidden');
+  });
+  
+  document.getElementById('mark-wrong-btn').addEventListener('click', () => {
+    handleWrongAnswer();
+    closeModal();
   });
   
   document.getElementById('close-btn').addEventListener('click', closeModal);

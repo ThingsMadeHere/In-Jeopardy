@@ -172,6 +172,17 @@ body {
   display: none !important;
 }
 
+.verification-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.verification-buttons.hidden {
+  display: none !important;
+}
+
 .correct {
   background: #1a3a1a;
   border-color: #2a5a2a;
