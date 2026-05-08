@@ -239,7 +239,8 @@ function createRoom(code) {
     state: 'waiting',
     buzzQueue: [],
     currentQuestion: null,
-    questionAttempts: new Map() // Tracks attempts per question index for explanation workflow
+    questionAttempts: new Map(), // Tracks attempts per question index for explanation workflow
+    disabledTeamsPerQuestion: new Map() // Tracks which teams are disabled for each question (got it wrong)
   };
 }
 
@@ -404,6 +405,15 @@ app.post('/api/verify-answer', async (req, res) => {
       attempts++;
       room.questionAttempts.set(questionIndex, attempts);
       
+      // Disable this team from buzzing again for this question
+      const questionKey = `${room.currentQuestion.categoryIndex}-${questionIndex}`;
+      let disabledTeams = room.disabledTeamsPerQuestion.get(questionKey);
+      if (!disabledTeams) {
+        disabledTeams = new Set();
+        room.disabledTeamsPerQuestion.set(questionKey, disabledTeams);
+      }
+      disabledTeams.add(parseInt(team));
+      
       // Check if max attempts reached - mark as USED
       if (attempts >= MAX_EXPLANATION_ATTEMPTS) {
         broadcastToRoom(room.code, {
@@ -415,6 +425,9 @@ app.post('/api/verify-answer', async (req, res) => {
     } else {
       // Correct answer - clear attempts and mark answered
       room.questionAttempts.delete(questionIndex);
+      // Also clear disabled teams for this question since it's now answered
+      const questionKey = `${room.currentQuestion.categoryIndex}-${questionIndex}`;
+      room.disabledTeamsPerQuestion.delete(questionKey);
     }
     
     broadcastToRoom(room.code, {
@@ -587,6 +600,14 @@ function handleBuzz(data, clientInfo) {
   const room = rooms.get(clientInfo.room);
   if (!room || room.buzzQueue.find(b => b.team === data.team)) return;
   
+  // Check if this team is disabled for the current question (got it wrong already)
+  const questionKey = `${room.currentQuestion?.categoryIndex}-${room.currentQuestion?.questionIndex}`;
+  const disabledTeams = room.disabledTeamsPerQuestion.get(questionKey) || new Set();
+  if (disabledTeams.has(data.team)) {
+    console.log(`Team ${data.team} is disabled for this question (got it wrong)`);
+    return; // Don't allow buzz from teams that got it wrong
+  }
+  
   room.buzzQueue.push({ team: data.team, player: data.player, time: Date.now() });
   broadcastToRoom(room.code, { 
     type: 'buzz-accepted', 
@@ -654,6 +675,12 @@ const HANDLERS = {
   'question-open': handleQuestionOpen,
   'question-close': (data, client) => {
     clearBuzzQueue(client.room);
+    // Clear disabled teams for the current question when closing
+    const room = rooms.get(client.room);
+    if (room && room.currentQuestion) {
+      const questionKey = `${room.currentQuestion.categoryIndex}-${room.currentQuestion.questionIndex}`;
+      room.disabledTeamsPerQuestion.delete(questionKey);
+    }
     broadcastToRoom(client.room, { type: 'question-close' }, 'student');
   },
   'team-state': handleTeamState,
