@@ -77,7 +77,7 @@ const MSG_HANDLERS = {
   'join-success': (data) => { myTeam = data.team; showGameScreen(data); },
   'join-error': (data) => showError(data.message),
   'question-open': (data) => enableBuzzing(data),
-  'buzz-accepted': (data) => data.player === myName ? handleBuzzAccepted(data) : lockoutBuzzer(),
+  'buzz-accepted': (data) => data.player === myName ? handleBuzzAccepted(data) : null,
   'question-close': () => resetBuzzer(),
   'team-state': (data) => updateTeamState(data.teams),
   'answer-verified': (data) => handleAnswerVerification(data),
