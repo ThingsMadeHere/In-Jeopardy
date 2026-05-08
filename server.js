@@ -15,6 +15,9 @@ const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const CONFIGS_DIR = path.join(__dirname, 'configs');
 const DEFAULT_ROOM_CODE = 'GAME';
 
+// Maximum attempts before a question becomes USED automatically
+const MAX_EXPLANATION_ATTEMPTS = 3;
+
 // Ensure directories exist
 [UPLOADS_DIR, CONFIGS_DIR].forEach(dir => {
   if (!fs.existsSync(dir)) {
@@ -235,7 +238,8 @@ function createRoom(code) {
     teams: [[], [], [], [], [], []],
     state: 'waiting',
     buzzQueue: [],
-    currentQuestion: null
+    currentQuestion: null,
+    questionAttempts: new Map() // Tracks attempts per question index for explanation workflow
   };
 }
 
@@ -385,7 +389,7 @@ app.post('/api/submit-answer', upload.single('audio'), async (req, res) => {
 
 app.post('/api/verify-answer', async (req, res) => {
   try {
-    const { team, player, questionValue, isCorrect } = req.body;
+    const { team, player, questionValue, isCorrect, questionIndex } = req.body;
     
     const room = findRoomByPlayer(player);
     if (!room || !room.currentQuestion) {
@@ -394,12 +398,34 @@ app.post('/api/verify-answer', async (req, res) => {
     
     console.log(`Teacher verified answer: ${player} - ${isCorrect ? 'Correct' : 'Wrong'}`);
     
+    // Track attempts for explanation workflow
+    if (!isCorrect) {
+      let attempts = room.questionAttempts.get(questionIndex) || 0;
+      attempts++;
+      room.questionAttempts.set(questionIndex, attempts);
+      
+      // Check if max attempts reached - mark as USED
+      if (attempts >= MAX_EXPLANATION_ATTEMPTS) {
+        broadcastToRoom(room.code, {
+          type: 'question-max-attempts',
+          questionIndex,
+          message: 'Maximum attempts reached. Question is now USED.'
+        });
+      }
+    } else {
+      // Correct answer - clear attempts and mark answered
+      room.questionAttempts.delete(questionIndex);
+    }
+    
     broadcastToRoom(room.code, {
       type: 'answer-graded',
       team: parseInt(team),
       player,
       isCorrect,
-      questionValue: parseInt(questionValue)
+      questionValue: parseInt(questionValue),
+      questionIndex,
+      attempts: room.questionAttempts.get(questionIndex) || 0,
+      maxAttempts: MAX_EXPLANATION_ATTEMPTS
     });
     
     res.json({ success: true });

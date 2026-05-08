@@ -81,7 +81,8 @@ const MSG_HANDLERS = {
   'question-close': () => resetBuzzer(),
   'team-state': (data) => updateTeamState(data.teams),
   'answer-verified': (data) => handleAnswerVerification(data),
-  'answer-graded': (data) => handleAnswerGraded(data)
+  'answer-graded': (data) => handleAnswerGraded(data),
+  'question-max-attempts': (data) => handleMaxAttemptsReached(data)
 };
 
 function handleMessage(data) {
@@ -142,6 +143,14 @@ function handleAnswerGraded(data) {
   if (data.player === myName) {
     console.log(`Answer graded: ${data.isCorrect ? 'Correct' : 'Wrong'}`);
     
+    // Show attempt info if wrong answer
+    if (!data.isCorrect && data.attempts !== undefined) {
+      const remaining = data.maxAttempts - data.attempts;
+      if (remaining > 0) {
+        console.log(`${remaining} attempt(s) remaining before question becomes USED`);
+      }
+    }
+    
     // Update score display using the team-state message which will come separately
     // Score is updated via team-state broadcast from server
     
@@ -149,6 +158,12 @@ function handleAnswerGraded(data) {
       resetBuzzer();
     }, 3000);
   }
+}
+
+function handleMaxAttemptsReached(data) {
+  console.log('Maximum attempts reached - question is now USED');
+  // Visual feedback could be added here if needed
+  // The board will automatically show USED state when re-rendered
 }
 
 function lockoutBuzzer() {
