@@ -130,7 +130,6 @@ function openQuestion(categoryIndex, questionIndex) {
   }
   
   document.getElementById('answer-section').classList.add('hidden');
-  document.getElementById('result-buttons').classList.add('hidden');
   document.getElementById('close-btn').classList.add('hidden');
   
   document.getElementById('question-modal').classList.remove('hidden');
@@ -147,19 +146,7 @@ function setupModalListeners() {
   document.getElementById('show-answer-btn').addEventListener('click', () => {
     document.getElementById('answer-section').classList.remove('hidden');
     document.getElementById('show-answer-btn').classList.add('hidden');
-    // Don't show result-buttons - autograding handles it
-  });
-  
-  document.getElementById('correct-btn').addEventListener('click', () => {
-    handleCorrectAnswer();
-    markQuestionAnswered();
-    closeModal();
-  });
-  
-  document.getElementById('wrong-btn').addEventListener('click', () => {
-    handleWrongAnswer();
-    markQuestionAnswered();
-    closeModal();
+    // Score buttons will be shown when answer is verified
   });
   
   document.getElementById('close-btn').addEventListener('click', closeModal);
@@ -406,7 +393,6 @@ function openQuestion(categoryIndex, questionIndex) {
   }
   
   document.getElementById('answer-section').classList.add('hidden');
-  document.getElementById('result-buttons').classList.add('hidden');
   document.getElementById('close-btn').classList.add('hidden');
   
   document.getElementById('question-modal').classList.remove('hidden');
@@ -424,22 +410,19 @@ function handleAnswerVerified(data) {
   // Show answer section so teacher can manually grade
   document.getElementById('answer-section').classList.remove('hidden');
   document.getElementById('show-answer-btn').classList.add('hidden');
-  document.getElementById('result-buttons').classList.remove('hidden');
+  document.getElementById('score-buttons').classList.remove('hidden');
   
-  // Set up manual grading buttons
-  const correctBtn = document.getElementById('correct-btn');
-  const wrongBtn = document.getElementById('wrong-btn');
-  
-  // Remove old listeners and add new ones with current data
-  correctBtn.replaceWith(correctBtn.cloneNode(true));
-  wrongBtn.replaceWith(wrongBtn.cloneNode(true));
-  
-  document.getElementById('correct-btn').addEventListener('click', () => {
-    submitManualGrade(data.team, data.player, data.questionValue, true);
+  // Set up score buttons
+  const scoreButtons = document.querySelectorAll('.score-btn');
+  scoreButtons.forEach(btn => {
+    btn.replaceWith(btn.cloneNode(true));
   });
   
-  document.getElementById('wrong-btn').addEventListener('click', () => {
-    submitManualGrade(data.team, data.player, data.questionValue, false);
+  document.querySelectorAll('.score-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const points = parseInt(btn.dataset.points);
+      submitManualScore(data.team, data.player, points);
+    });
   });
   
   // Show transcript for teacher review
@@ -448,26 +431,54 @@ function handleAnswerVerified(data) {
     <h4>Student Answer</h4>
     <p><strong>Player:</strong> ${data.player}</p>
     <p><strong>Response:</strong> ${data.transcript}</p>
-    <p class="manual-grade-prompt">Teacher: Click Correct or Wrong to grade</p>
+    <p class="manual-grade-prompt">Teacher: Click a score button to grade</p>
+    <div class="score-buttons" id="score-buttons">
+      <button class="score-btn" data-points="100">+100</button>
+      <button class="score-btn" data-points="200">+200</button>
+      <button class="score-btn" data-points="300">+300</button>
+      <button class="score-btn" data-points="400">+400</button>
+      <button class="score-btn" data-points="500">+500</button>
+      <button class="score-btn negative" data-points="-100">-100</button>
+      <button class="score-btn negative" data-points="-200">-200</button>
+      <button class="score-btn negative" data-points="-300">-300</button>
+      <button class="score-btn negative" data-points="-400">-400</button>
+      <button class="score-btn negative" data-points="-500">-500</button>
+    </div>
   `;
+  
+  // Re-attach listeners after innerHTML update
+  document.querySelectorAll('.score-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const points = parseInt(btn.dataset.points);
+      submitManualScore(data.team, data.player, points);
+    });
+  });
 }
 
-async function submitManualGrade(team, player, questionValue, isCorrect) {
+async function submitManualScore(team, player, points) {
   try {
-    await fetch('/api/verify-answer', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ team, player, questionValue, isCorrect })
-    });
-    
-    // Apply score locally
     answeringTeam = TEAMS[team];
-    if (isCorrect) {
-      handleCorrectAnswer();
-      showFeedback(`${player} correct!`, '#00ff00');
+    
+    if (points > 0) {
+      answeringTeam.score += points;
+      answeringTeam.streak++;
+      const bonus = checkStreakBonus(answeringTeam);
+      let message = '';
+      if (bonus > 0) {
+        message += ` +$${bonus} streak bonus!`;
+      }
+      updateTeamDisplay(answeringTeam.id);
+      showFeedback(`${player} +$${points}${message}`, '#00ff00');
     } else {
-      handleWrongAnswer();
-      showFeedback(`${player} wrong`, '#ff4444');
+      answeringTeam.score += points;
+      answeringTeam.streak = 0;
+      updateTeamDisplay(answeringTeam.id);
+      showFeedback(`${player} $${points}`, '#ff4444');
+    }
+    
+    sendTeamState();
+    if (points > 0) {
+      resetOtherStreaks(team);
     }
     
     // Mark question as answered
@@ -477,6 +488,6 @@ async function submitManualGrade(team, player, questionValue, isCorrect) {
     
     closeModal();
   } catch (err) {
-    console.error('Failed to submit grade:', err);
+    console.error('Failed to submit score:', err);
   }
 }
