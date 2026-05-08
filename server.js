@@ -566,7 +566,8 @@ function handleBuzz(data, clientInfo) {
     type: 'buzz-accepted', 
     team: data.team, 
     player: data.player, 
-    position: room.buzzQueue.length 
+    position: room.buzzQueue.length,
+    questionValue: room.currentQuestion?.value || 0
   }, 'all');
   if (room.teacher) send(room.teacher.ws, 'buzz-queue', { queue: room.buzzQueue });
 }
