@@ -11,7 +11,6 @@ const multer = require('multer');
 // ============================================================================
 
 const PORT = 3000;
-const SIMILARITY_THRESHOLD = 0.5; // Threshold for considering an answer correct (0.0 to 1.0)
 
 // ============================================================================
 // EXPRESS & WEBSOCKET SETUP
@@ -49,42 +48,6 @@ app.use(express.json());
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-/**
- * Simple text similarity for manual scoring
- */
-function calculateTextSimilarity(text1, text2) {
-  // Simple case-insensitive comparison for manual scoring
-  const t1 = text1.toLowerCase().trim();
-  const t2 = text2.toLowerCase().trim();
-  
-  if (t1 === t2) return 1.0; // Exact match
-  if (t1.includes(t2) || t2.includes(t1)) return 0.8; // Partial match
-  return 0.0; // No match
-}
-
-/**
- * Calculate best text similarity against multiple acceptable answers for manual scoring
- */
-function calculateBestTextSimilarity(transcript, acceptableAnswers) {
-  const answers = Array.isArray(acceptableAnswers) ? acceptableAnswers : [acceptableAnswers];
-  
-  let bestSimilarity = 0;
-  let bestMatch = '';
-  
-  for (const answer of answers) {
-    if (!answer) continue;
-    
-    const similarity = calculateTextSimilarity(transcript, answer);
-    
-    if (similarity > bestSimilarity) {
-      bestSimilarity = similarity;
-      bestMatch = answer;
-    }
-  }
-  
-  return { similarity: bestSimilarity, bestMatch };
-}
 
 /**
  * Transcribe audio buffer to text (placeholder - returns empty string)
@@ -369,23 +332,12 @@ app.post('/api/test-transcribe', async (req, res) => {
     
     console.log(`Transcription result for ${filename}: "${transcript}"`);
     
-    if (transcript) {
-      // Test similarity against "Mars" as a sample
-      const { similarity } = calculateBestTextSimilarity(transcript, ['Mars', 'What is Mars?', 'The Red Planet']);
-      
-      res.json({
-        success: true,
-        transcript,
-        processingTime,
-        similarity: Math.round(similarity * 100) / 100
-      });
-    } else {
-      res.json({
-        success: false,
-        error: 'No speech detected',
-        processingTime
-      });
-    }
+    // For manual grading, just return the transcript (if any)
+    res.json({
+      success: true,
+      transcript: transcript || '[Manual verification needed]',
+      processingTime
+    });
   } catch (error) {
     console.error('Test transcription error:', error);
     res.status(500).json({ 
@@ -418,59 +370,24 @@ app.post('/api/submit-answer', upload.single('audio'), async (req, res) => {
     // Read the saved file for transcription
     const audioBuffer = fs.readFileSync(req.file.path);
     
-    // Check if manual scoring mode is enabled
-    const manualScoring = req.body.manualScoring === 'true';
+    // Transcribe audio (placeholder - returns empty string)
+    console.log('Transcribing audio...');
+    const transcript = await transcribeAudio(audioBuffer);
+    console.log('Transcription result:', transcript);
     
-    let transcript = '';
-    if (manualScoring) {
-      // Manual scoring - teacher will verify answer
-      console.log('Manual scoring mode - skipping transcription');
-      transcript = req.body.transcript || '[Manual verification needed]';
-    } else {
-      // Automatic transcription
-      console.log('Transcribing audio...');
-      transcript = await transcribeAudio(audioBuffer);
-      console.log('Transcription result:', transcript);
-      
-      if (!transcript) {
-        console.log('No speech detected in audio file');
-        return res.json({ transcript: '', similarity: 0, isCorrect: false, matchedAnswer: '' });
-      }
-    }
-    
-    const acceptableAnswers = room.currentQuestion.correctAnswer;
-    
-    let similarity = 0;
-    let bestMatch = '';
-    let isCorrect = false;
-    
-    if (!manualScoring) {
-      // Only calculate similarity for automatic scoring
-      const result = calculateBestTextSimilarity(transcript, acceptableAnswers);
-      similarity = result.similarity;
-      bestMatch = result.bestMatch;
-      isCorrect = similarity >= SIMILARITY_THRESHOLD;
-    } else {
-      // Manual scoring - will be determined by teacher
-      similarity = 0; // Placeholder
-      bestMatch = transcript;
-      isCorrect = false; // Will be set by teacher
-    }
-    
+    // For manual grading, send transcript to teacher for verification
     if (room.teacher) {
       send(room.teacher.ws, 'answer-verified', {
         team: parseInt(team),
         player,
-        transcript,
-        correctAnswer: acceptableAnswers,
-        matchedAnswer: bestMatch,
-        similarity,
-        isCorrect,
+        transcript: transcript || '[Manual verification needed]',
         questionValue: parseInt(questionValue)
       });
     }
     
-    res.json({ transcript, similarity, isCorrect, matchedAnswer: bestMatch, manualScoring });
+    res.json({ 
+      transcript: transcript || '[Manual verification needed]'
+    });
   } catch (err) {
     console.error('Error processing answer:', err);
     res.status(500).json({ error: 'Failed to process answer' });
@@ -478,88 +395,34 @@ app.post('/api/submit-answer', upload.single('audio'), async (req, res) => {
 });
 
 // ============================================================================
-// API ROUTES - MANUAL ANSWER SUBMISSION
+// API ROUTES - MANUAL ANSWER VERIFICATION
 // ============================================================================
 
-app.post('/api/submit-manual-answer', async (req, res) => {
+// Teacher manually verifies and scores the answer
+app.post('/api/verify-answer', async (req, res) => {
   try {
-    const { team, player, questionValue, transcript } = req.body;
-    
-    if (!transcript) {
-      return res.status(400).json({ error: 'Transcript required for manual scoring' });
-    }
+    const { team, player, questionValue, isCorrect } = req.body;
     
     const room = findRoomByPlayer(player);
     if (!room || !room.currentQuestion) {
       return res.status(400).json({ error: 'No active question' });
     }
     
-    console.log(`Manual answer submitted: ${transcript}`);
+    console.log(`Teacher verified answer: ${player} - ${isCorrect ? 'Correct' : 'Wrong'}`);
     
-    const acceptableAnswers = room.currentQuestion.correctAnswer;
-    
-    // For manual scoring, teacher will determine correctness
-    const similarity = 0; // Placeholder
-    const bestMatch = transcript;
-    const isCorrect = false; // Will be set by teacher
-    
-    if (room.teacher) {
-      send(room.teacher.ws, 'answer-verified', {
-        team: parseInt(team),
-        player,
-        transcript,
-        correctAnswer: acceptableAnswers,
-        matchedAnswer: bestMatch,
-        similarity,
-        isCorrect,
-        questionValue: parseInt(questionValue),
-        manualScoring: true
-      });
-    }
-    
-    res.json({ transcript, similarity, isCorrect, matchedAnswer: bestMatch, manualScoring: true });
-  } catch (err) {
-    console.error('Error processing manual answer:', err);
-    res.status(500).json({ error: 'Failed to process manual answer' });
-  }
-});
-
-// ============================================================================
-// API ROUTES - TEST
-// ============================================================================
-
-// Test endpoint to verify speech-to-answer similarity pipeline
-app.get('/api/test-similarity', async (req, res) => {
-  try {
-    const testCases = [
-      { transcript: 'Mars', answers: ['What is Mars?', 'Mars', 'The Red Planet'] },
-      { transcript: 'the red planet', answers: ['What is Mars?', 'Mars', 'The Red Planet'] },
-      { transcript: 'George Washington', answers: ['Who is George Washington?', 'George Washington', 'Washington'] },
-      { transcript: 'water', answers: ['What is water?', 'Water', 'H2O'] }
-    ];
-    
-    const results = [];
-    for (const test of testCases) {
-      const start = Date.now();
-      const { similarity, bestMatch } = calculateBestTextSimilarity(test.transcript, test.answers);
-      const duration = Date.now() - start;
-      
-      results.push({
-        transcript: test.transcript,
-        acceptableAnswers: test.answers,
-        bestMatch,
-        similarity: Math.round(similarity * 100) + '%',
-        isCorrect: similarity > 0, // Any match is considered correct for manual scoring
-        processingTime: duration + 'ms'
-      });
-    }
-    
-    res.json({
-      status: '✅ Manual scoring system working',
-      results
+    // Notify all clients of the result
+    broadcastToRoom(room.code, {
+      type: 'answer-graded',
+      team: parseInt(team),
+      player,
+      isCorrect,
+      questionValue: parseInt(questionValue)
     });
+    
+    res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message, stack: err.stack });
+    console.error('Error verifying answer:', err);
+    res.status(500).json({ error: 'Failed to verify answer' });
   }
 });
 
