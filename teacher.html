@@ -26,13 +26,21 @@
         <div class="question-text" id="modal-question"></div>
         <div class="answer-section hidden" id="answer-section">
           <div class="answer-text" id="modal-answer"></div>
+          <div class="score-buttons hidden" id="score-buttons">
+            <button class="score-btn" data-points="100">+100</button>
+            <button class="score-btn" data-points="200">+200</button>
+            <button class="score-btn" data-points="300">+300</button>
+            <button class="score-btn" data-points="400">+400</button>
+            <button class="score-btn" data-points="500">+500</button>
+            <button class="score-btn negative" data-points="-100">-100</button>
+            <button class="score-btn negative" data-points="-200">-200</button>
+            <button class="score-btn negative" data-points="-300">-300</button>
+            <button class="score-btn negative" data-points="-400">-400</button>
+            <button class="score-btn negative" data-points="-500">-500</button>
+          </div>
         </div>
         <div class="modal-buttons">
           <button id="show-answer-btn" class="btn hidden">Show Answer</button>
-          <div class="result-buttons hidden" id="result-buttons">
-            <button id="correct-btn" class="btn correct">Correct</button>
-            <button id="wrong-btn" class="btn wrong">Wrong</button>
-          </div>
           <button id="close-btn" class="btn close hidden">Close</button>
         </div>
       </div>
