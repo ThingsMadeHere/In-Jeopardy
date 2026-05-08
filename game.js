@@ -152,11 +152,41 @@ function setupModalListeners() {
     handleCorrectAnswer();
     markQuestionAnswered();
     closeModal();
+    
+    // Send verification to server with questionIndex for attempt tracking
+    if (currentQuestion && currentQuestion.questionIndex !== undefined) {
+      fetch('/api/verify-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          team: answeringTeam.id,
+          player: 'teacher',
+          questionValue: currentQuestion.value,
+          isCorrect: true,
+          questionIndex: currentQuestion.questionIndex
+        })
+      });
+    }
   });
   
   document.getElementById('mark-wrong-btn').addEventListener('click', () => {
     handleWrongAnswer();
     closeModal();
+    
+    // Send verification to server with questionIndex for attempt tracking
+    if (currentQuestion && currentQuestion.questionIndex !== undefined) {
+      fetch('/api/verify-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          team: answeringTeam.id,
+          player: 'teacher',
+          questionValue: currentQuestion.value,
+          isCorrect: false,
+          questionIndex: currentQuestion.questionIndex
+        })
+      });
+    }
   });
   
   document.getElementById('close-btn').addEventListener('click', closeModal);
