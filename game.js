@@ -87,7 +87,7 @@ function renderBoard() {
       
       if (answeredQuestions.has(questionId)) {
         cell.classList.add('answered');
-        cell.textContent = '';
+        cell.textContent = 'USED';
       } else {
         cell.textContent = `$${category.questions[row].value}`;
         cell.addEventListener('click', () => openQuestion(catIndex, row));
@@ -150,8 +150,8 @@ function setupModalListeners() {
   
   document.getElementById('mark-correct-btn').addEventListener('click', () => {
     handleCorrectAnswer();
-    document.getElementById('verification-buttons').classList.add('hidden');
-    document.getElementById('score-buttons').classList.remove('hidden');
+    markQuestionAnswered();
+    closeModal();
   });
   
   document.getElementById('mark-wrong-btn').addEventListener('click', () => {
@@ -420,20 +420,6 @@ function handleAnswerVerified(data) {
   // Show answer section so teacher can manually grade
   document.getElementById('answer-section').classList.remove('hidden');
   document.getElementById('show-answer-btn').classList.add('hidden');
-  document.getElementById('score-buttons').classList.remove('hidden');
-  
-  // Set up score buttons
-  const scoreButtons = document.querySelectorAll('.score-btn');
-  scoreButtons.forEach(btn => {
-    btn.replaceWith(btn.cloneNode(true));
-  });
-  
-  document.querySelectorAll('.score-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const points = parseInt(btn.dataset.points);
-      submitManualScore(data.team, data.player, points);
-    });
-  });
   
   // Show transcript for teacher review
   const answerSection = document.getElementById('answer-section');
@@ -441,63 +427,5 @@ function handleAnswerVerified(data) {
     <h4>Student Answer</h4>
     <p><strong>Player:</strong> ${data.player}</p>
     <p><strong>Response:</strong> ${data.transcript}</p>
-    <p class="manual-grade-prompt">Teacher: Click a score button to grade</p>
-    <div class="score-buttons" id="score-buttons">
-      <button class="score-btn" data-points="100">+100</button>
-      <button class="score-btn" data-points="200">+200</button>
-      <button class="score-btn" data-points="300">+300</button>
-      <button class="score-btn" data-points="400">+400</button>
-      <button class="score-btn" data-points="500">+500</button>
-      <button class="score-btn negative" data-points="-100">-100</button>
-      <button class="score-btn negative" data-points="-200">-200</button>
-      <button class="score-btn negative" data-points="-300">-300</button>
-      <button class="score-btn negative" data-points="-400">-400</button>
-      <button class="score-btn negative" data-points="-500">-500</button>
-    </div>
   `;
-  
-  // Re-attach listeners after innerHTML update
-  document.querySelectorAll('.score-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const points = parseInt(btn.dataset.points);
-      submitManualScore(data.team, data.player, points);
-    });
-  });
-}
-
-async function submitManualScore(team, player, points) {
-  try {
-    answeringTeam = TEAMS[team];
-    
-    if (points > 0) {
-      answeringTeam.score += points;
-      answeringTeam.streak++;
-      const bonus = checkStreakBonus(answeringTeam);
-      let message = '';
-      if (bonus > 0) {
-        message += ` +$${bonus} streak bonus!`;
-      }
-      updateTeamDisplay(answeringTeam.id);
-      showFeedback(`${player} +$${points}${message}`, '#00ff00');
-    } else {
-      answeringTeam.score += points;
-      answeringTeam.streak = 0;
-      updateTeamDisplay(answeringTeam.id);
-      showFeedback(`${player} $${points}`, '#ff4444');
-    }
-    
-    sendTeamState();
-    if (points > 0) {
-      resetOtherStreaks(team);
-    }
-    
-    // Mark question as answered
-    if (currentQuestion) {
-      markQuestionAnswered();
-    }
-    
-    closeModal();
-  } catch (err) {
-    console.error('Failed to submit score:', err);
-  }
 }
