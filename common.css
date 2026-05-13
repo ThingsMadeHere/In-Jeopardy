@@ -55,6 +55,13 @@ header h1 {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  opacity: 1;
+}
+
+.modal.fade-out {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease-in-out;
 }
 
 .modal-content {
