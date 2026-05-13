@@ -73,14 +73,16 @@ const MSG_HANDLERS = {
   'join-success': (data) => { myTeam = data.team; showGameScreen(data); },
   'join-error': (data) => showError(data.message),
   'question-open': enableBuzzing,
-  'buzz-accepted': (data) => data.player === myName ? handleBuzzAccepted(data) : lockoutBuzzer(),
+  'buzz-accepted': (data) => data.player === myName ? handleBuzzAccepted(data) : lockoutBuzzer(data.isExplanation),
   'buzz-rejected': handleBuzzRejected,
   'question-close': resetBuzzer,
   'team-state': (data) => updateTeamState(data.teams),
   'answer-verified': () => console.log('Waiting for teacher to grade...'),
   'answer-graded': handleAnswerGraded,
   'question-max-attempts': () => console.log('Maximum attempts reached - question is now USED'),
-  'kicked': handleKicked
+  'kicked': handleKicked,
+  'explanation-start': handleExplanationStart,
+  'explanation-end': handleExplanationEnd
 };
 
 function handleMessage(data) {
@@ -163,11 +165,48 @@ function handleKicked(data) {
   showError(data.message || 'You have been removed from the team. Please rejoin.');
 }
 
-function lockoutBuzzer() {
+function lockoutBuzzer(isExplanation = false) {
   const buzzer = document.getElementById('buzzer');
   buzzer.classList.add('locked');
   buzzer.disabled = true;
-  setState('lockedout-state');
+  
+  if (isExplanation) {
+    // During explanation round, show different message
+    setState('lockedout-state');
+    const lockedText = document.querySelector('#lockedout-state .locked-text');
+    if (lockedText) {
+      lockedText.textContent = 'Someone buzzed to explain!';
+    }
+  } else {
+    setState('lockedout-state');
+  }
+}
+
+function handleExplanationStart(data) {
+  console.log('[EXPLANATION START] Wrong team:', data.wrongTeamId);
+  
+  // Enable buzzing for teams other than the wrong team
+  if (myTeam !== data.wrongTeamId) {
+    enableBuzzing();
+    const buzzer = document.getElementById('buzzer');
+    buzzer.querySelector('.buzzer-text').textContent = 'BUZZ TO EXPLAIN!';
+  } else {
+    // Wrong team cannot buzz - show waiting state with message
+    setState('waiting-state');
+    const waitingText = document.querySelector('#waiting-state .waiting-text');
+    if (waitingText) {
+      waitingText.textContent = 'Waiting for explanation...';
+    }
+    const buzzer = document.getElementById('buzzer');
+    buzzer.disabled = true;
+  }
+}
+
+function handleExplanationEnd(data) {
+  console.log('[EXPLANATION END]');
+  
+  // Reset buzzer state
+  resetBuzzer();
 }
 
 function handleBuzzRejected(data) {

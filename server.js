@@ -577,6 +577,44 @@ function handleBuzz(data, clientInfo) {
     return;
   }
   
+  // Check if we're in explanation mode
+  if (room.explanationMode) {
+    // Only allow teams OTHER than the wrong team to buzz
+    if (data.team === room.wrongTeamId) {
+      console.log(`[BUZZ REJECTED] Wrong team cannot buzz during explanation`);
+      send(clientInfo.ws, 'buzz-rejected', { reason: 'Your team cannot buzz during explanation' });
+      return;
+    }
+    
+    // For explanation mode, accept the first buzz and notify teacher
+    if (room.buzzQueue.length === 0) {
+      room.buzzQueue.push({ team: data.team, player: data.player, time: Date.now() });
+      console.log(`[EXPLANATION BUZZ ACCEPTED] Team ${data.team}, player ${data.player}`);
+      
+      // Notify teacher that someone buzzed for explanation
+      if (room.teacher) {
+        send(room.teacher.ws, 'explanation-buzz', { 
+          team: data.team, 
+          player: data.player 
+        });
+      }
+      
+      // Notify all students that someone buzzed
+      broadcastToRoom(room.code, { 
+        type: 'buzz-accepted', 
+        team: data.team, 
+        player: data.player, 
+        position: 1,
+        isExplanation: true
+      }, 'all');
+    } else {
+      // Already someone buzzed, reject
+      console.log(`[EXPLANATION BUZZ REJECTED] Someone already buzzed`);
+      send(clientInfo.ws, 'buzz-rejected', { reason: 'Someone already buzzed' });
+    }
+    return;
+  }
+  
   if (!room.currentQuestion) {
     console.log(`[BUZZ REJECTED] No active question`);
     send(clientInfo.ws, 'buzz-rejected', { reason: 'No active question' });
@@ -634,6 +672,38 @@ function handleBroadcastResult(data, clientInfo) {
     transcript: data.transcript,
     isCorrect: data.isCorrect
   }, 'student');
+}
+
+function handleExplanationStart(data, clientInfo) {
+  const room = rooms.get(clientInfo.room);
+  if (!room || clientInfo.role !== 'teacher') return;
+  
+  room.explanationMode = true;
+  room.wrongTeamId = data.wrongTeamId;
+  room.buzzQueue = []; // Clear buzz queue for explanation round
+  
+  console.log(`[EXPLANATION START] Wrong team: ${data.wrongTeamId}`);
+  
+  // Notify all students that explanation round has started
+  broadcastToRoom(clientInfo.room, { 
+    type: 'explanation-start',
+    wrongTeamId: data.wrongTeamId,
+    questionValue: data.questionValue
+  }, 'student');
+}
+
+function handleExplanationEnd(data, clientInfo) {
+  const room = rooms.get(clientInfo.room);
+  if (!room || clientInfo.role !== 'teacher') return;
+  
+  room.explanationMode = false;
+  room.wrongTeamId = null;
+  room.buzzQueue = []; // Clear buzz queue
+  
+  console.log('[EXPLANATION END]');
+  
+  // Notify all students that explanation round has ended
+  broadcastToRoom(clientInfo.room, { type: 'explanation-end' }, 'student');
 }
 
 function handleTeamState(data, clientInfo) {
