@@ -3,26 +3,24 @@ const getWsUrl = () => {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${location.host}`;
 };
+
 const WS_URL = getWsUrl();
 const DEFAULT_ROOM = 'GAME';
+
 let ws = null;
 let currentState = 'waiting';
 let myTeam = null;
 let myName = '';
 let myTeamScore = 0;
 
-document.addEventListener('DOMContentLoaded', () => {
-  setupJoinScreen();
-});
+document.addEventListener('DOMContentLoaded', setupJoinScreen);
 
 function setupJoinScreen() {
   document.getElementById('join-btn').addEventListener('click', joinGame);
-
   document.getElementById('team-name').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') joinGame();
   });
-
-  // Add buzzer event listener
+  
   const buzzer = document.getElementById('buzzer');
   if (buzzer) {
     buzzer.addEventListener('click', buzzIn);
@@ -31,12 +29,10 @@ function setupJoinScreen() {
 
 function joinGame() {
   myName = document.getElementById('team-name').value.trim();
-
   if (!myName) {
     showError('Please enter your name');
     return;
   }
-
   connectWebSocket(DEFAULT_ROOM, myName);
 }
 
@@ -68,7 +64,7 @@ function connectWebSocket(roomCode, name) {
     document.getElementById('connection-status').classList.add('disconnected');
   };
 
-  ws.onerror = (err) => {
+  ws.onerror = () => {
     showError('Connection failed. Please try again.');
   };
 }
@@ -76,15 +72,15 @@ function connectWebSocket(roomCode, name) {
 const MSG_HANDLERS = {
   'join-success': (data) => { myTeam = data.team; showGameScreen(data); },
   'join-error': (data) => showError(data.message),
-  'question-open': (data) => enableBuzzing(data),
+  'question-open': enableBuzzing,
   'buzz-accepted': (data) => data.player === myName ? handleBuzzAccepted(data) : lockoutBuzzer(),
-  'buzz-rejected': (data) => handleBuzzRejected(data),
-  'question-close': () => resetBuzzer(),
+  'buzz-rejected': handleBuzzRejected,
+  'question-close': resetBuzzer,
   'team-state': (data) => updateTeamState(data.teams),
-  'answer-verified': (data) => handleAnswerVerification(data),
-  'answer-graded': (data) => handleAnswerGraded(data),
-  'question-max-attempts': (data) => handleMaxAttemptsReached(data),
-  'kicked': (data) => handleKicked(data)
+  'answer-verified': () => console.log('Waiting for teacher to grade...'),
+  'answer-graded': handleAnswerGraded,
+  'question-max-attempts': () => console.log('Maximum attempts reached - question is now USED'),
+  'kicked': handleKicked
 };
 
 function handleMessage(data) {
@@ -107,7 +103,7 @@ function setState(state) {
   document.getElementById(state).classList.remove('hidden');
 }
 
-function enableBuzzing(data) {
+function enableBuzzing() {
   const buzzer = document.getElementById('buzzer');
   buzzer.classList.remove('locked', 'buzzed');
   buzzer.disabled = false;
@@ -127,7 +123,7 @@ function buzzIn() {
   document.getElementById('buzzer').disabled = true;
 }
 
-function handleBuzzAccepted(data) {
+function handleBuzzAccepted() {
   console.log('Buzz accepted, waiting for teacher...');
   const buzzer = document.getElementById('buzzer');
   buzzer.classList.add('buzzed');
@@ -135,17 +131,10 @@ function handleBuzzAccepted(data) {
   setState('waiting-state');
 }
 
-function handleAnswerVerification(data) {
-  // Teacher received the answer and will manually grade it
-  console.log('Waiting for teacher to grade...');
-}
-
 function handleAnswerGraded(data) {
-  // Notify student of the grading result
   if (data.player === myName) {
     console.log(`Answer graded: ${data.isCorrect ? 'Correct' : 'Wrong'}`);
     
-    // Show attempt info if wrong answer
     if (!data.isCorrect && data.attempts !== undefined) {
       const remaining = data.maxAttempts - data.attempts;
       if (remaining > 0) {
@@ -153,39 +142,24 @@ function handleAnswerGraded(data) {
       }
     }
     
-    // Update score display using the team-state message which will come separately
-    // Score is updated via team-state broadcast from server
-    
-    setTimeout(() => {
-      resetBuzzer();
-    }, 3000);
+    setTimeout(resetBuzzer, 3000);
   }
 }
 
-function handleMaxAttemptsReached(data) {
-  console.log('Maximum attempts reached - question is now USED');
-  // Visual feedback could be added here if needed
-  // The board will automatically show USED state when re-rendered
-}
-
 function handleKicked(data) {
-  // Close WebSocket connection
   if (ws) {
     ws.close();
     ws = null;
   }
   
-  // Reset state
   myTeam = null;
   myName = '';
   myTeamScore = 0;
   
-  // Show join screen with message
   document.getElementById('game-screen').classList.add('hidden');
   document.getElementById('join-screen').classList.remove('hidden');
   document.getElementById('team-name').value = '';
   
-  // Show kick message
   showError(data.message || 'You have been removed from the team. Please rejoin.');
 }
 
@@ -198,7 +172,6 @@ function lockoutBuzzer() {
 
 function handleBuzzRejected(data) {
   console.log('Buzz rejected:', data.reason);
-  // Re-enable the buzzer so the student can try again if needed
   const buzzer = document.getElementById('buzzer');
   buzzer.disabled = false;
   buzzer.querySelector('.buzzer-text').textContent = 'BUZZ!';
@@ -213,7 +186,6 @@ function resetBuzzer() {
   setState('waiting-state');
 }
 
-
 function updateTeamState(teams) {
   const myTeamData = teams.find(t => t.id === myTeam);
   if (myTeamData) {
@@ -227,4 +199,3 @@ function updateScoreDisplay() {
   scoreEl.textContent = `$${myTeamScore}`;
   scoreEl.style.color = myTeamScore >= 0 ? '#00ff00' : '#ff4444';
 }
-

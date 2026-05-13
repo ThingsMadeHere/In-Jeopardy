@@ -7,18 +7,16 @@ const fs = require('fs');
 const multer = require('multer');
 
 // ============================================================================
-// CONFIGURATION
+// CONFIGURATION & CONSTANTS
 // ============================================================================
 
 const PORT = 3000;
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const CONFIGS_DIR = path.join(__dirname, 'configs');
 const DEFAULT_ROOM_CODE = 'GAME';
-
-// Maximum attempts before a question becomes USED automatically
 const MAX_EXPLANATION_ATTEMPTS = 3;
 
-// Ensure directories exist
+// Ensure upload and config directories exist
 [UPLOADS_DIR, CONFIGS_DIR].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -51,7 +49,7 @@ app.use(express.static(__dirname));
 app.use(express.json());
 
 // ============================================================================
-// AUDIO TRANSCRIPTION
+// AUDIO TRANSCRIPTION HELPER
 // ============================================================================
 
 /**
@@ -189,8 +187,8 @@ function createRoom(code) {
     state: 'waiting',
     buzzQueue: [],
     currentQuestion: null,
-    questionAttempts: new Map(), // Tracks attempts per question index for explanation workflow
-    disabledTeamsPerQuestion: new Map() // Tracks which teams are disabled for each question (got it wrong)
+    questionAttempts: new Map(),
+    disabledTeamsPerQuestion: new Map()
   };
 }
 
@@ -218,16 +216,16 @@ function broadcastToRoom(roomCode, message, target = 'all') {
   if (!room) return;
   
   const msg = JSON.stringify(message);
+  
   const sendIfOpen = (ws, recipient) => {
-    if (!ws) return;
-    if (ws.readyState !== 1) {
-      console.log(`Cannot send to ${recipient}: readyState=${ws.readyState}`);
+    if (!ws || ws.readyState !== 1) {
+      console.log(`Cannot send to ${recipient}: readyState=${ws?.readyState}`);
       return;
     }
     try {
       ws.send(msg);
     } catch (err) {
-      console.error(`Failed to send message to ${recipient}:`, err.message);
+      console.error(`Failed to send to ${recipient}:`, err.message);
     }
   };
   
@@ -547,9 +545,12 @@ function handleStudentJoin(data, clientInfo) {
     rooms.set(data.roomCode, room);
   }
   
+  // Find team with minimum players for balanced assignment
   const teamSizes = room.teams.map(t => t.length);
   const minSize = Math.min(...teamSizes);
-  const availableTeams = teamSizes.map((size, i) => size === minSize ? i : null).filter(i => i !== null);
+  const availableTeams = teamSizes
+    .map((size, i) => size === minSize ? i : null)
+    .filter(i => i !== null);
   const assignedTeam = availableTeams[Math.floor(Math.random() * availableTeams.length)];
   
   const playerId = uuidv4();
@@ -566,41 +567,36 @@ function handleStudentJoin(data, clientInfo) {
 function handleBuzz(data, clientInfo) {
   const room = rooms.get(clientInfo.room);
   
-  // Log buzz attempt for debugging
-  console.log(`Buzz attempt from team ${data.team}, player ${data.player} in room ${clientInfo.room}`);
+  console.log(`[BUZZ] Team ${data.team}, player ${data.player} in room ${clientInfo.room}`);
   
   if (!room) {
-    console.log(`Buzz rejected: Room ${clientInfo.room} not found`);
+    console.log(`[BUZZ REJECTED] Room ${clientInfo.room} not found`);
     send(clientInfo.ws, 'buzz-rejected', { reason: 'Room not found' });
     return;
   }
   
-  // Check if question is open
   if (!room.currentQuestion) {
-    console.log(`Buzz rejected: No active question`);
+    console.log(`[BUZZ REJECTED] No active question`);
     send(clientInfo.ws, 'buzz-rejected', { reason: 'No active question' });
     return;
   }
   
-  // Check if this team already buzzed
-  const existingBuzz = room.buzzQueue.find(b => b.team === data.team);
-  if (existingBuzz) {
-    console.log(`Buzz rejected: Team ${data.team} already buzzed`);
+  if (room.buzzQueue.some(b => b.team === data.team)) {
+    console.log(`[BUZZ REJECTED] Team ${data.team} already buzzed`);
     send(clientInfo.ws, 'buzz-rejected', { reason: 'Team already buzzed' });
     return;
   }
   
-  // Check if this team is disabled for the current question (got it wrong already)
   const questionKey = `${room.currentQuestion?.categoryIndex}-${room.currentQuestion?.questionIndex}`;
   const disabledTeams = room.disabledTeamsPerQuestion.get(questionKey) || new Set();
   if (disabledTeams.has(data.team)) {
-    console.log(`Buzz rejected: Team ${data.team} is disabled for this question (got it wrong)`);
+    console.log(`[BUZZ REJECTED] Team ${data.team} disabled for this question`);
     send(clientInfo.ws, 'buzz-rejected', { reason: 'Team disabled for this question' });
     return;
   }
   
   room.buzzQueue.push({ team: data.team, player: data.player, time: Date.now() });
-  console.log(`Buzz accepted: Team ${data.team}, player ${data.player}, position ${room.buzzQueue.length}`);
+  console.log(`[BUZZ ACCEPTED] Team ${data.team}, player ${data.player}, position ${room.buzzQueue.length}`);
   
   broadcastToRoom(room.code, { 
     type: 'buzz-accepted', 
@@ -609,7 +605,10 @@ function handleBuzz(data, clientInfo) {
     position: room.buzzQueue.length,
     questionValue: room.currentQuestion?.value || 0
   }, 'all');
-  if (room.teacher) send(room.teacher.ws, 'buzz-queue', { queue: room.buzzQueue });
+  
+  if (room.teacher) {
+    send(room.teacher.ws, 'buzz-queue', { queue: room.buzzQueue });
+  }
 }
 
 function handleQuestionOpen(data, clientInfo) {
@@ -649,10 +648,8 @@ function handleKickTeam(data, clientInfo) {
   const teamId = data.teamId;
   const playersToKick = [...room.teams[teamId]];
   
-  // Remove all players from the team
   room.teams[teamId] = [];
   
-  // Remove students from the room and notify them to rejoin
   playersToKick.forEach(player => {
     const studentEntry = [...room.students.entries()].find(([_, s]) => s.id === player.id);
     if (studentEntry) {
@@ -662,7 +659,6 @@ function handleKickTeam(data, clientInfo) {
     }
   });
   
-  // Update teacher display
   broadcastToRoom(room.code, { type: 'player-left', name: 'All players', team: teamId }, 'teacher');
 }
 
@@ -694,14 +690,12 @@ const HANDLERS = {
   'question-open': handleQuestionOpen,
   'question-close': (data, client) => {
     clearBuzzQueue(client.room);
-    // Clear disabled teams for the current question when closing
     const room = rooms.get(client.room);
     if (room && room.currentQuestion) {
       const questionKey = `${room.currentQuestion.categoryIndex}-${room.currentQuestion.questionIndex}`;
       room.disabledTeamsPerQuestion.delete(questionKey);
     }
     broadcastToRoom(client.room, { type: 'question-close' }, 'student');
-    // Also send updated (empty) buzz queue to teacher
     if (room.teacher) send(room.teacher.ws, 'buzz-queue', { queue: room.buzzQueue });
   },
   'team-state': handleTeamState,
@@ -717,18 +711,13 @@ function handleMessage(data, clientInfo) {
 wss.on('connection', (ws) => {
   let clientInfo = { ws, role: null, room: null };
 
-  // Add ping/pong for connection health checking
+  // Ping/pong heartbeat for connection health checking
   const pingInterval = setInterval(() => {
-    if (ws.readyState === 1) {
-      ws.ping();
-    } else {
-      clearInterval(pingInterval);
-    }
-  }, 30000); // Ping every 30 seconds
+    if (ws.readyState === 1) ws.ping();
+    else clearInterval(pingInterval);
+  }, 30000);
   
-  ws.on('pong', () => {
-    // Connection is alive
-  });
+  ws.on('pong', () => { /* Connection is alive */ });
 
   ws.on('message', (message) => {
     try {
