@@ -7,10 +7,21 @@ const fs = require('fs');
 const multer = require('multer');
 
 // ============================================================================
-// CONFIGURATION
+// CONFIGURATION & CONSTANTS
 // ============================================================================
 
 const PORT = 3000;
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+const CONFIGS_DIR = path.join(__dirname, 'configs');
+const DEFAULT_ROOM_CODE = 'GAME';
+const MAX_EXPLANATION_ATTEMPTS = 3;
+
+// Ensure upload and config directories exist
+[UPLOADS_DIR, CONFIGS_DIR].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
 
 // ============================================================================
 // EXPRESS & WEBSOCKET SETUP
@@ -20,43 +31,33 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// Configure multer for audio uploads with disk storage
+// Configure multer for audio uploads
 const upload = multer({ 
   storage: multer.diskStorage({
-    destination: (req, file, cb) => {
-      cb(null, uploadsDir);
-    },
+    destination: (_, __, cb) => cb(null, UPLOADS_DIR),
     filename: (req, file, cb) => {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const playerName = req.body.player || 'unknown';
-      const originalExtension = path.extname(file.originalname) || '.webm';
-      cb(null, `${playerName}-${timestamp}${originalExtension}`);
+      const ext = path.extname(file.originalname) || '.webm';
+      cb(null, `${playerName}-${timestamp}${ext}`);
     }
   }),
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024 }
 });
 
 app.use(express.static(__dirname));
 app.use(express.json());
 
 // ============================================================================
-// HELPER FUNCTIONS
+// AUDIO TRANSCRIPTION HELPER
 // ============================================================================
 
 /**
- * Transcribe audio buffer to text (placeholder - returns empty string)
- * This is a stub function that should be replaced with actual speech-to-text implementation
+ * Transcribe audio buffer to text (placeholder)
+ * Replace with actual speech-to-text implementation
  */
-async function transcribeAudio(audioBuffer) {
-  // Placeholder: In a real implementation, this would call a speech-to-text API
-  // For now, return empty string to indicate no transcription available
-  console.log('transcribeAudio called - placeholder function (no actual transcription)');
+async function transcribeAudio(_) {
+  console.log('transcribeAudio called - placeholder function');
   return '';
 }
 
@@ -69,32 +70,52 @@ const rooms = new Map();
 const defaultGameData = {
   categories: [
     {
-      name: "Plot & Summary",
+      name: "Key Points to Consider",
       questions: [
         { 
           value: 200, 
-          question: "The protagonist's main motivation throughout the essay.", 
-          answer: ["What is reading?", "What is literacy?", "What is learning to read?"] 
+          question: "Alexie's family lives on an Indian ____", 
+          answer: ["What is a reservation?", "What is reservation?"] 
         },
         { 
           value: 400, 
-          question: "Where the protagonist grew up, which shaped his educational experience.", 
-          answer: ["What is a reservation?", "What is the reservation?", "What is an Indian reservation?"] 
+          question: "What the protagonist became professionally, despite never being taught creative writing?", 
+          answer: ["What is a writer?", "What is an author?"] 
         },
         { 
           value: 600, 
-          question: "What the protagonist refused to do, despite expectations placed on him.", 
-          answer: ["What is fail?", "What is to fail?", "What is failing in school?"] 
+          question: "The ultimate purpose behind the protagonist's obsessive reading, stated explicitly in the essay", 
+          answer: ["What is to save his life?", "What is survival?"] 
         },
         { 
           value: 800, 
-          question: "What the protagonist became professionally, despite never being taught creative writing.", 
-          answer: ["What is a writer?", "What is an author?", "What is writing?"] 
+          question: "According to the author, a smart Indian is hated by both white people and____", 
+          answer: ["What are other Indians?", "What is other Indians?"] 
+        },
+      ]
+    },
+    {
+      name: "Narrative Perspectives",
+      questions: [
+        { 
+          value: 200, 
+          question: "Narration by character in story—use of 'I', 'my', 'we'", 
+          answer: ["What is first-person point of view?", "What is 1st person POV?"] 
         },
         { 
-          value: 1000, 
-          question: "The ultimate purpose behind the protagonist's obsessive reading, stated explicitly in the essay.", 
-          answer: ["What is to save his life?", "What is saving his life?", "What is survival?"] 
+          value: 400, 
+          question: "Speaker directly addresses reader—use of 'you'", 
+          answer: ["What is second-person point of view?", "What is 2nd person POV?"] 
+        },
+        { 
+          value: 600, 
+          question: "Speaker is outside of story—describes with 'he/she/they'. Narrator has access to all characters' feelings and thoughts", 
+          answer: ["What is third-person omniscient point of view?", "What is 3rd omniscient POV?"] 
+        },
+        { 
+          value: 800, 
+          question: "Speaker is outside of story—describes with 'he/she/they'. Narrator restricted viewpoint to a single person's inner thoughts", 
+          answer: ["What is third-person limited point of view?", "What is 3rd limited POV?"] 
         },
       ]
     },
@@ -104,12 +125,12 @@ const defaultGameData = {
         { 
           value: 200, 
           question: "This object is what the protagonist says he learned to read with.", 
-          answer: ["What is a Superman comic book?", "What is a comic book?", "What is Superman?"] 
+          answer: ["What is a Superman comic book?", "What is a comic book?"] 
         },
         { 
           value: 400, 
           question: "Complete this quote: 'Despite all the books I read, I am still surprised I became a ______.'", 
-          answer: ["What is writer?", "What is a writer?"] 
+          answer: ["What is writer?", "What is author?"] 
         },
         { 
           value: 600, 
@@ -121,100 +142,30 @@ const defaultGameData = {
           question: "Complete this quote about expectations: 'If he'd been anything but an Indian boy living on a reservation, he might have been called a prodigy. But he is an Indian boy living on a reservation and is simply an ______.'", 
           answer: ["What is oddity?", "What is an oddity?"] 
         },
-        { 
-          value: 1000, 
-          question: "This three-part anaphora appears twice in the essay to describe the protagonist's self-perception.", 
-          answer: ["What is 'I am smart. I am arrogant. I am lucky.'?", "What is 'I was smart. I was arrogant. I was lucky.'?"] 
-        },
       ]
     },
     {
-      name: "Perspective & Voice",
+      name: "Complete this quote",
       questions: [
         { 
           value: 200, 
-          question: "The narrative perspective used throughout the essay.", 
-          answer: ["What is first-person?", "What is first-person point of view?", "What is first-person narration?"] 
+          question: "Complete this quote: 'This knowledge delighted me. I began to think of everything in terms of___. Our reservation was a small____ within the United States'", 
+          answer: ["What is paragraph?", "What is a paragraph?"] 
         },
         { 
           value: 400, 
-          question: "The pronoun the protagonist uses to refer to himself in the opening, creating emotional distance.", 
-          answer: ["What is 'he'?", "What is the third-person pronoun 'he'?"] 
+          question: "'There must have been visiting teachers. Who were they? Where are they now? Do they exist?' The author infers that if one never sees something, one has no idea it ____", 
+          answer: ["What is exists?", "What is exist?"] 
         },
         { 
           value: 600, 
-          question: "The rhetorical shift that occurs in the final paragraph, changing 'my life' to this.", 
-          answer: ["What is 'our lives'?", "What is the collective 'our'?"] 
+          question: "'I was smart. I was arrogant. I was lucky.' The author infers these were key traits for him to____; he argues that education system wants Indians to ____", 
+          answer: ["What is succeed, fail?", "What is to succeed and to fail?"] 
         },
         { 
           value: 800, 
-          question: "This literary device is used when the protagonist says he reads with 'equal parts joy and desperation.'", 
-          answer: ["What is juxtaposition?", "What is contrast?", "What is paradox?"] 
-        },
-        { 
-          value: 1000, 
-          question: "The tone created by the repeated phrase 'Books,' I say to them. 'Books,' I say.", 
-          answer: ["What is urgency?", "What is insistence?", "What is persistence?", "What is a pleading tone?"] 
-        },
-      ]
-    },
-    {
-      name: "Metaphor & Symbolism",
-      questions: [
-        { 
-          value: 200, 
-          question: "Reading is metaphorically described as this life-or-death action.", 
-          answer: ["What is saving a life?", "What is survival?", "What is rescue?"] 
-        },
-        { 
-          value: 400, 
-          question: "The students who refuse to engage are described as having these, which the protagonist tries to break through.", 
-          answer: ["What are locked doors?", "What is a locked door?"] 
-        },
-        { 
-          value: 600, 
-          question: "Empty notebooks and missing pens symbolize this for the defeated students.", 
-          answer: ["What is unrealized potential?", "What is silenced voice?", "What is lost opportunity?"] 
-        },
-        { 
-          value: 800, 
-          question: "The phrase 'throw my weight against their locked doors' uses this type of figurative language.", 
-          answer: ["What is a metaphor?", "What is metaphorical language?"] 
-        },
-        { 
-          value: 1000, 
-          question: "The window that defeated students 'stare out of' symbolizes this.", 
-          answer: ["What is longing for freedom?", "What is desire for escape?", "What is hope for something beyond?", "What is a barrier between inside and outside?"] 
-        },
-      ]
-    },
-    {
-      name: "Themes & Context",
-      questions: [
-        { 
-          value: 200, 
-          question: "This systemic issue explains why Native students were 'expected to be stupid' in the classroom.", 
-          answer: ["What is racism?", "What is discrimination?", "What is educational inequity?", "What is colonialism?"] 
-        },
-        { 
-          value: 400, 
-          question: "The essay critiques this type of education that disconnected Native children from their culture.", 
-          answer: ["What is assimilationist education?", "What is colonial education?", "What is forced assimilation?"] 
-        },
-        { 
-          value: 600, 
-          question: "The protagonist's ability to tell 'complicated stories' at home but be 'monosyllabic' at school illustrates this concept.", 
-          answer: ["What is code-switching?", "What is linguistic code-switching?", "What is cultural code-switching?"] 
-        },
-        { 
-          value: 800, 
-          question: "The essay suggests that the absence of Native writers in the curriculum perpetuates this limiting belief.", 
-          answer: ["What is 'you can't be what you can't see'?", "What is lack of representation?", "What is invisible role models?"] 
-        },
-        { 
-          value: 1000, 
-          question: "The protagonist's return to teach on the reservation represents this broader concept of breaking cycles.", 
-          answer: ["What is intergenerational healing?", "What is giving back?", "What is community responsibility?", "What is decolonizing education?"] 
+          question: "'I throw my weight against their locked doors. The door holds.' The author uses the repeated element of door to allude that he is____", 
+          answer: ["What is Superman?", "What is like Superman?"] 
         },
       ]
     }
@@ -224,7 +175,7 @@ const defaultGameData = {
 let gameData = { ...defaultGameData };
 
 // ============================================================================
-// HELPER FUNCTIONS
+// ROOM MANAGEMENT HELPERS
 // ============================================================================
 
 function createRoom(code) {
@@ -235,12 +186,15 @@ function createRoom(code) {
     teams: [[], [], [], [], [], []],
     state: 'waiting',
     buzzQueue: [],
-    currentQuestion: null
+    currentQuestion: null,
+    questionAttempts: new Map(),
+    disabledTeamsPerQuestion: new Map(),
+    explanationMode: false,
+    wrongTeamId: null
   };
 }
 
 // Create default room on startup
-const DEFAULT_ROOM_CODE = 'GAME';
 rooms.set(DEFAULT_ROOM_CODE, createRoom(DEFAULT_ROOM_CODE));
 console.log(`Default room '${DEFAULT_ROOM_CODE}' created`);
 
@@ -264,10 +218,27 @@ function broadcastToRoom(roomCode, message, target = 'all') {
   if (!room) return;
   
   const msg = JSON.stringify(message);
-  const sendIfOpen = (ws) => ws?.readyState === 1 && ws.send(msg);
   
-  if (target !== 'student' && room.teacher) sendIfOpen(room.teacher.ws);
-  if (target !== 'teacher') room.students.forEach(s => sendIfOpen(s.ws));
+  const sendIfOpen = (ws, recipient) => {
+    if (!ws || ws.readyState !== 1) {
+      console.log(`Cannot send to ${recipient}: readyState=${ws?.readyState}`);
+      return;
+    }
+    try {
+      ws.send(msg);
+    } catch (err) {
+      console.error(`Failed to send to ${recipient}:`, err.message);
+    }
+  };
+  
+  if (target !== 'student' && room.teacher) {
+    sendIfOpen(room.teacher.ws, `teacher-${roomCode}`);
+  }
+  if (target !== 'teacher') {
+    room.students.forEach((s, playerId) => {
+      sendIfOpen(s.ws, `student-${playerId}`);
+    });
+  }
 }
 
 function clearBuzzQueue(roomCode) {
@@ -288,16 +259,12 @@ app.get('/api/game', (req, res) => {
 
 app.get('/api/audio-files', (req, res) => {
   try {
-    const files = fs.readdirSync(uploadsDir)
+    const files = fs.readdirSync(UPLOADS_DIR)
       .filter(file => file.endsWith('.webm'))
       .map(file => {
-        const filePath = path.join(uploadsDir, file);
+        const filePath = path.join(UPLOADS_DIR, file);
         const stats = fs.statSync(filePath);
-        return {
-          name: file,
-          size: stats.size,
-          created: stats.birthtime
-        };
+        return { name: file, size: stats.size, created: stats.birthtime };
       })
       .sort((a, b) => b.created - a.created);
     
@@ -316,7 +283,7 @@ app.post('/api/test-transcribe', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Filename required' });
     }
     
-    const filePath = path.join(uploadsDir, filename);
+    const filePath = path.join(UPLOADS_DIR, filename);
     
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ success: false, error: 'File not found' });
@@ -325,14 +292,12 @@ app.post('/api/test-transcribe', async (req, res) => {
     console.log(`Testing transcription for: ${filename}`);
     const startTime = Date.now();
     
-    // Read and transcribe the file
     const audioBuffer = fs.readFileSync(filePath);
     const transcript = await transcribeAudio(audioBuffer);
     const processingTime = Date.now() - startTime;
     
     console.log(`Transcription result for ${filename}: "${transcript}"`);
     
-    // For manual grading, just return the transcript (if any)
     res.json({
       success: true,
       transcript: transcript || '[Manual verification needed]',
@@ -340,10 +305,7 @@ app.post('/api/test-transcribe', async (req, res) => {
     });
   } catch (error) {
     console.error('Test transcription error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -367,15 +329,12 @@ app.post('/api/submit-answer', upload.single('audio'), async (req, res) => {
     console.log(`Audio file saved: ${req.file.path}`);
     console.log(`File size: ${req.file.size} bytes`);
     
-    // Read the saved file for transcription
     const audioBuffer = fs.readFileSync(req.file.path);
     
-    // Transcribe audio (placeholder - returns empty string)
     console.log('Transcribing audio...');
     const transcript = await transcribeAudio(audioBuffer);
     console.log('Transcription result:', transcript);
     
-    // For manual grading, send transcript to teacher for verification
     if (room.teacher) {
       send(room.teacher.ws, 'answer-verified', {
         team: parseInt(team),
@@ -385,9 +344,7 @@ app.post('/api/submit-answer', upload.single('audio'), async (req, res) => {
       });
     }
     
-    res.json({ 
-      transcript: transcript || '[Manual verification needed]'
-    });
+    res.json({ transcript: transcript || '[Manual verification needed]' });
   } catch (err) {
     console.error('Error processing answer:', err);
     res.status(500).json({ error: 'Failed to process answer' });
@@ -398,10 +355,9 @@ app.post('/api/submit-answer', upload.single('audio'), async (req, res) => {
 // API ROUTES - MANUAL ANSWER VERIFICATION
 // ============================================================================
 
-// Teacher manually verifies and scores the answer
 app.post('/api/verify-answer', async (req, res) => {
   try {
-    const { team, player, questionValue, isCorrect } = req.body;
+    const { team, player, questionValue, isCorrect, questionIndex } = req.body;
     
     const room = findRoomByPlayer(player);
     if (!room || !room.currentQuestion) {
@@ -410,13 +366,46 @@ app.post('/api/verify-answer', async (req, res) => {
     
     console.log(`Teacher verified answer: ${player} - ${isCorrect ? 'Correct' : 'Wrong'}`);
     
-    // Notify all clients of the result
+    // Track attempts for explanation workflow
+    if (!isCorrect) {
+      let attempts = room.questionAttempts.get(questionIndex) || 0;
+      attempts++;
+      room.questionAttempts.set(questionIndex, attempts);
+      
+      // Disable this team from buzzing again for this question
+      const questionKey = `${room.currentQuestion.categoryIndex}-${questionIndex}`;
+      let disabledTeams = room.disabledTeamsPerQuestion.get(questionKey);
+      if (!disabledTeams) {
+        disabledTeams = new Set();
+        room.disabledTeamsPerQuestion.set(questionKey, disabledTeams);
+      }
+      disabledTeams.add(parseInt(team));
+      
+      // Check if max attempts reached - mark as USED
+      if (attempts >= MAX_EXPLANATION_ATTEMPTS) {
+        broadcastToRoom(room.code, {
+          type: 'question-max-attempts',
+          questionIndex,
+          message: 'Maximum attempts reached. Question is now USED.'
+        });
+      }
+    } else {
+      // Correct answer - clear attempts and mark answered
+      room.questionAttempts.delete(questionIndex);
+      // Also clear disabled teams for this question since it's now answered
+      const questionKey = `${room.currentQuestion.categoryIndex}-${questionIndex}`;
+      room.disabledTeamsPerQuestion.delete(questionKey);
+    }
+    
     broadcastToRoom(room.code, {
       type: 'answer-graded',
       team: parseInt(team),
       player,
       isCorrect,
-      questionValue: parseInt(questionValue)
+      questionValue: parseInt(questionValue),
+      questionIndex,
+      attempts: room.questionAttempts.get(questionIndex) || 0,
+      maxAttempts: MAX_EXPLANATION_ATTEMPTS
     });
     
     res.json({ success: true });
@@ -430,7 +419,6 @@ app.post('/api/verify-answer', async (req, res) => {
 // API ROUTES - ROOM MANAGEMENT
 // ============================================================================
 
-// Debug endpoint to check active rooms
 app.get('/api/debug/rooms', (req, res) => {
   const roomList = [];
   for (const [code, room] of rooms.entries()) {
@@ -455,15 +443,9 @@ app.post('/api/room', (req, res) => {
 // API ROUTES - ADMIN CONFIGURATION
 // ============================================================================
 
-const configsPath = path.join(__dirname, 'configs');
-
-if (!fs.existsSync(configsPath)) {
-  fs.mkdirSync(configsPath, { recursive: true });
-}
-
 app.get('/api/admin/configs', (req, res) => {
   try {
-    const files = fs.readdirSync(configsPath).filter(f => f.endsWith('.json'));
+    const files = fs.readdirSync(CONFIGS_DIR).filter(f => f.endsWith('.json'));
     const configs = files.map(f => ({ name: f.replace('.json', '') }));
     res.json(configs);
   } catch (err) {
@@ -474,15 +456,14 @@ app.get('/api/admin/configs', (req, res) => {
 
 app.get('/api/admin/config/:name', (req, res) => {
   try {
-    const configName = req.params.name;
-    const configFile = path.join(configsPath, `${configName}.json`);
+    const configFile = path.join(CONFIGS_DIR, `${req.params.name}.json`);
     
     if (!fs.existsSync(configFile)) {
       return res.status(404).json({ error: 'Configuration not found' });
     }
     
     const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
-    res.json({ name: configName, config });
+    res.json({ name: req.params.name, config });
   } catch (err) {
     console.error('Failed to load config:', err);
     res.status(500).json({ error: 'Failed to load configuration' });
@@ -496,7 +477,7 @@ app.post('/api/admin/save', (req, res) => {
       return res.status(400).json({ error: 'Name and config required' });
     }
     
-    const configFile = path.join(configsPath, `${name}.json`);
+    const configFile = path.join(CONFIGS_DIR, `${name}.json`);
     fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
     res.json({ success: true });
   } catch (err) {
@@ -507,8 +488,7 @@ app.post('/api/admin/save', (req, res) => {
 
 app.delete('/api/admin/config/:name', (req, res) => {
   try {
-    const configName = req.params.name;
-    const configFile = path.join(configsPath, `${configName}.json`);
+    const configFile = path.join(CONFIGS_DIR, `${req.params.name}.json`);
     
     if (fs.existsSync(configFile)) {
       fs.unlinkSync(configFile);
@@ -528,13 +508,12 @@ app.post('/api/admin/activate', (req, res) => {
       return res.status(400).json({ error: 'Configuration name required' });
     }
     
-    const configFile = path.join(configsPath, `${name}.json`);
+    const configFile = path.join(CONFIGS_DIR, `${name}.json`);
     if (!fs.existsSync(configFile)) {
       return res.status(404).json({ error: 'Configuration not found' });
     }
     
-    const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
-    gameData = config;
+    gameData = JSON.parse(fs.readFileSync(configFile, 'utf8'));
     res.json({ success: true, name });
   } catch (err) {
     console.error('Failed to activate config:', err);
@@ -568,9 +547,12 @@ function handleStudentJoin(data, clientInfo) {
     rooms.set(data.roomCode, room);
   }
   
+  // Find team with minimum players for balanced assignment
   const teamSizes = room.teams.map(t => t.length);
   const minSize = Math.min(...teamSizes);
-  const availableTeams = teamSizes.map((size, i) => size === minSize ? i : null).filter(i => i !== null);
+  const availableTeams = teamSizes
+    .map((size, i) => size === minSize ? i : null)
+    .filter(i => i !== null);
   const assignedTeam = availableTeams[Math.floor(Math.random() * availableTeams.length)];
   
   const playerId = uuidv4();
@@ -586,11 +568,87 @@ function handleStudentJoin(data, clientInfo) {
 
 function handleBuzz(data, clientInfo) {
   const room = rooms.get(clientInfo.room);
-  if (!room || room.buzzQueue.find(b => b.team === data.team)) return;
+  
+  console.log(`[BUZZ] Team ${data.team}, player ${data.player} in room ${clientInfo.room}`);
+  
+  if (!room) {
+    console.log(`[BUZZ REJECTED] Room ${clientInfo.room} not found`);
+    send(clientInfo.ws, 'buzz-rejected', { reason: 'Room not found' });
+    return;
+  }
+  
+  // Check if we're in explanation mode
+  if (room.explanationMode) {
+    // Only allow teams OTHER than the wrong team to buzz
+    if (data.team === room.wrongTeamId) {
+      console.log(`[BUZZ REJECTED] Wrong team cannot buzz during explanation`);
+      send(clientInfo.ws, 'buzz-rejected', { reason: 'Your team cannot buzz during explanation' });
+      return;
+    }
+    
+    // For explanation mode, accept the first buzz and notify teacher
+    if (room.buzzQueue.length === 0) {
+      room.buzzQueue.push({ team: data.team, player: data.player, time: Date.now() });
+      console.log(`[EXPLANATION BUZZ ACCEPTED] Team ${data.team}, player ${data.player}`);
+      
+      // Notify teacher that someone buzzed for explanation
+      if (room.teacher) {
+        send(room.teacher.ws, 'explanation-buzz', { 
+          team: data.team, 
+          player: data.player 
+        });
+      }
+      
+      // Notify all students that someone buzzed
+      broadcastToRoom(room.code, { 
+        type: 'buzz-accepted', 
+        team: data.team, 
+        player: data.player, 
+        position: 1,
+        isExplanation: true
+      }, 'all');
+    } else {
+      // Already someone buzzed, reject
+      console.log(`[EXPLANATION BUZZ REJECTED] Someone already buzzed`);
+      send(clientInfo.ws, 'buzz-rejected', { reason: 'Someone already buzzed' });
+    }
+    return;
+  }
+  
+  if (!room.currentQuestion) {
+    console.log(`[BUZZ REJECTED] No active question`);
+    send(clientInfo.ws, 'buzz-rejected', { reason: 'No active question' });
+    return;
+  }
+  
+  if (room.buzzQueue.some(b => b.team === data.team)) {
+    console.log(`[BUZZ REJECTED] Team ${data.team} already buzzed`);
+    send(clientInfo.ws, 'buzz-rejected', { reason: 'Team already buzzed' });
+    return;
+  }
+  
+  const questionKey = `${room.currentQuestion?.categoryIndex}-${room.currentQuestion?.questionIndex}`;
+  const disabledTeams = room.disabledTeamsPerQuestion.get(questionKey) || new Set();
+  if (disabledTeams.has(data.team)) {
+    console.log(`[BUZZ REJECTED] Team ${data.team} disabled for this question`);
+    send(clientInfo.ws, 'buzz-rejected', { reason: 'Team disabled for this question' });
+    return;
+  }
   
   room.buzzQueue.push({ team: data.team, player: data.player, time: Date.now() });
-  broadcastToRoom(room.code, { type: 'buzz-accepted', team: data.team, player: data.player, position: room.buzzQueue.length }, 'all');
-  if (room.teacher) send(room.teacher.ws, 'buzz-queue', { queue: room.buzzQueue });
+  console.log(`[BUZZ ACCEPTED] Team ${data.team}, player ${data.player}, position ${room.buzzQueue.length}`);
+  
+  broadcastToRoom(room.code, { 
+    type: 'buzz-accepted', 
+    team: data.team, 
+    player: data.player, 
+    position: room.buzzQueue.length,
+    questionValue: room.currentQuestion?.value || 0
+  }, 'all');
+  
+  if (room.teacher) {
+    send(room.teacher.ws, 'buzz-queue', { queue: room.buzzQueue });
+  }
 }
 
 function handleQuestionOpen(data, clientInfo) {
@@ -616,9 +674,64 @@ function handleBroadcastResult(data, clientInfo) {
   }, 'student');
 }
 
+function handleExplanationStart(data, clientInfo) {
+  const room = rooms.get(clientInfo.room);
+  if (!room || clientInfo.role !== 'teacher') return;
+  
+  room.explanationMode = true;
+  room.wrongTeamId = data.wrongTeamId;
+  room.buzzQueue = []; // Clear buzz queue for explanation round
+  
+  console.log(`[EXPLANATION START] Wrong team: ${data.wrongTeamId}`);
+  
+  // Notify all students that explanation round has started
+  broadcastToRoom(clientInfo.room, { 
+    type: 'explanation-start',
+    wrongTeamId: data.wrongTeamId,
+    questionValue: data.questionValue
+  }, 'student');
+}
+
+function handleExplanationEnd(data, clientInfo) {
+  const room = rooms.get(clientInfo.room);
+  if (!room || clientInfo.role !== 'teacher') return;
+  
+  room.explanationMode = false;
+  room.wrongTeamId = null;
+  room.buzzQueue = []; // Clear buzz queue
+  
+  console.log('[EXPLANATION END]');
+  
+  // Notify all students that explanation round has ended
+  broadcastToRoom(clientInfo.room, { type: 'explanation-end' }, 'student');
+}
+
 function handleTeamState(data, clientInfo) {
   if (clientInfo.role !== 'teacher') return;
   broadcastToRoom(clientInfo.room, { type: 'team-state', teams: data.teams }, 'student');
+}
+
+function handleKickTeam(data, clientInfo) {
+  if (clientInfo.role !== 'teacher') return;
+  
+  const room = rooms.get(clientInfo.room);
+  if (!room) return;
+  
+  const teamId = data.teamId;
+  const playersToKick = [...room.teams[teamId]];
+  
+  room.teams[teamId] = [];
+  
+  playersToKick.forEach(player => {
+    const studentEntry = [...room.students.entries()].find(([_, s]) => s.id === player.id);
+    if (studentEntry) {
+      const [playerId, student] = studentEntry;
+      send(student.ws, 'kicked', { message: 'You have been removed from the team. Please rejoin with a new name.' });
+      room.students.delete(playerId);
+    }
+  });
+  
+  broadcastToRoom(room.code, { type: 'player-left', name: 'All players', team: teamId }, 'teacher');
 }
 
 function handleDisconnect(clientInfo) {
@@ -649,10 +762,19 @@ const HANDLERS = {
   'question-open': handleQuestionOpen,
   'question-close': (data, client) => {
     clearBuzzQueue(client.room);
+    const room = rooms.get(client.room);
+    if (room && room.currentQuestion) {
+      const questionKey = `${room.currentQuestion.categoryIndex}-${room.currentQuestion.questionIndex}`;
+      room.disabledTeamsPerQuestion.delete(questionKey);
+    }
     broadcastToRoom(client.room, { type: 'question-close' }, 'student');
+    if (room.teacher) send(room.teacher.ws, 'buzz-queue', { queue: room.buzzQueue });
   },
+  'explanation-start': handleExplanationStart,
+  'explanation-end': handleExplanationEnd,
   'team-state': handleTeamState,
-  'broadcast-result': handleBroadcastResult
+  'broadcast-result': handleBroadcastResult,
+  'kick-team': handleKickTeam
 };
 
 function handleMessage(data, clientInfo) {
@@ -662,6 +784,14 @@ function handleMessage(data, clientInfo) {
 
 wss.on('connection', (ws) => {
   let clientInfo = { ws, role: null, room: null };
+
+  // Ping/pong heartbeat for connection health checking
+  const pingInterval = setInterval(() => {
+    if (ws.readyState === 1) ws.ping();
+    else clearInterval(pingInterval);
+  }, 30000);
+  
+  ws.on('pong', () => { /* Connection is alive */ });
 
   ws.on('message', (message) => {
     try {
@@ -673,9 +803,14 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    clearInterval(pingInterval);
     if (clientInfo.room && clientInfo.role) {
       handleDisconnect(clientInfo);
     }
+  });
+  
+  ws.on('error', (err) => {
+    console.error(`WebSocket error for ${clientInfo.room || 'unknown'} (${clientInfo.role || 'unknown'}):`, err.message);
   });
 });
 

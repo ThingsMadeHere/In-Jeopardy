@@ -14,8 +14,9 @@ const TEAMS = [
   { id: 5, name: 'Team Orange', color: '#ff8844', score: 0, streak: 0, players: [] }
 ];
 
-let currentTeam = null;
 let answeringTeam = null;
+let explanationMode = false;
+let wrongTeamId = null;
 
 const STREAK_THRESHOLDS = [3, 5, 7];
 const STREAK_BONUS_POINTS = { 3: 100, 5: 250, 7: 500 };
@@ -23,6 +24,7 @@ const STREAK_BONUS_POINTS = { 3: 100, 5: 250, 7: 500 };
 document.addEventListener('DOMContentLoaded', () => {
   loadGame();
   setupModalListeners();
+  setupExplanationModalListeners();
   setupWebSocket();
   addBuzzerQueueDisplay();
 });
@@ -46,6 +48,7 @@ function renderTeams() {
     const teamDiv = document.createElement('div');
     teamDiv.className = 'team';
     teamDiv.style.borderColor = team.color;
+    
     teamDiv.innerHTML = `
       <div class="team-header">
         <span class="team-name" style="color: ${team.color}">${team.name}</span>
@@ -53,6 +56,9 @@ function renderTeams() {
       </div>
       <div class="team-stats">
         <span class="streak">Streak: <span id="team-streak-${team.id}">${team.streak}</span></span>
+      </div>
+      <div class="team-actions">
+        <button class="kick-btn" onclick="kickTeam(${team.id})" title="Remove team to rejoin with new name">Kick Team</button>
       </div>
     `;
     scoreBoard.appendChild(teamDiv);
@@ -88,7 +94,7 @@ function renderBoard() {
       
       if (answeredQuestions.has(questionId)) {
         cell.classList.add('answered');
-        cell.textContent = '';
+        cell.textContent = 'USED';
       } else {
         cell.textContent = `$${category.questions[row].value}`;
         cell.addEventListener('click', () => openQuestion(catIndex, row));
@@ -132,7 +138,8 @@ function openQuestion(categoryIndex, questionIndex) {
   document.getElementById('answer-section').classList.add('hidden');
   document.getElementById('close-btn').classList.add('hidden');
   
-  document.getElementById('question-modal').classList.remove('hidden');
+  // Reset modal state before opening
+  document.getElementById('question-modal').classList.remove('hidden', 'fade-out');
 }
 
 function selectAnsweringTeam(teamId) {
@@ -145,8 +152,51 @@ function selectAnsweringTeam(teamId) {
 function setupModalListeners() {
   document.getElementById('show-answer-btn').addEventListener('click', () => {
     document.getElementById('answer-section').classList.remove('hidden');
+    document.getElementById('verification-buttons').classList.remove('hidden');
     document.getElementById('show-answer-btn').classList.add('hidden');
-    // Score buttons will be shown when answer is verified
+  });
+  
+  document.getElementById('mark-correct-btn').addEventListener('click', () => {
+    handleCorrectAnswer();
+    markQuestionAnswered();
+    closeModal();
+    
+    // Send verification to server with questionIndex for attempt tracking
+    if (currentQuestion && currentQuestion.questionIndex !== undefined) {
+      fetch('/api/verify-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          team: answeringTeam.id,
+          player: 'teacher',
+          questionValue: currentQuestion.value,
+          isCorrect: true,
+          questionIndex: currentQuestion.questionIndex
+        })
+      });
+    }
+  });
+  
+  document.getElementById('mark-wrong-btn').addEventListener('click', () => {
+    handleWrongAnswer();
+    
+    // Open explanation modal for other teams to buzz in
+    openExplanationModal();
+    
+    // Send verification to server with questionIndex for attempt tracking
+    if (currentQuestion && currentQuestion.questionIndex !== undefined) {
+      fetch('/api/verify-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          team: answeringTeam.id,
+          player: 'teacher',
+          questionValue: currentQuestion.value,
+          isCorrect: false,
+          questionIndex: currentQuestion.questionIndex
+        })
+      });
+    }
   });
   
   document.getElementById('close-btn').addEventListener('click', closeModal);
@@ -241,14 +291,28 @@ function markQuestionAnswered() {
 }
 
 function closeModal() {
-  document.getElementById('question-modal').classList.add('hidden');
-  document.querySelector('.modal-content').dataset.answeringTeam = '';
-  currentQuestion = null;
-  answeringTeam = null;
+  const modal = document.getElementById('question-modal');
   
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'question-close' }));
-  }
+  // Add fade-out class for smooth transition
+  modal.classList.add('fade-out');
+  
+  // Allow transition to complete before hiding and resetting state
+  setTimeout(() => {
+    modal.classList.add('hidden');
+    modal.classList.remove('fade-out');
+    
+    document.querySelector('.modal-content').dataset.answeringTeam = '';
+    currentQuestion = null;
+    answeringTeam = null;
+    
+    // Clear local buzz queue immediately to ensure fresh start
+    buzzQueue = [];
+    updateBuzzQueue([]);
+    
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'question-close' }));
+    }
+  }, 200);
 }
 
 function checkGameComplete() {
@@ -292,9 +356,12 @@ function setupWebSocket() {
 const WS_HANDLERS = {
   'join-success': (data) => { roomCode = data.roomCode; },
   'player-joined': (data) => addPlayerToTeam(data.name, data.team),
+  'player-left': (data) => removePlayerFromTeam(data.name, data.team),
   'buzz-queue': (data) => updateBuzzQueue(data.queue),
   'buzz-accepted': (data) => showBuzzNotification(data),
-  'answer-verified': (data) => handleAnswerVerified(data)
+  'answer-verified': (data) => handleAnswerVerified(data),
+  'explanation-buzz': (data) => updateExplanationBuzz(data),
+  'explanation-started': (data) => handleExplanationStarted(data)
 };
 
 function handleWSMessage(data) {
@@ -314,7 +381,29 @@ function displayRoomCode(code) {
 
 function addPlayerToTeam(name, teamId) {
   TEAMS[teamId].players.push(name);
-  updateTeamDisplay(teamId);
+  // Update team name to show actual player names
+  if (TEAMS[teamId].players.length === 1) {
+    // First player - set team name to their name
+    TEAMS[teamId].name = name;
+  } else {
+    // Multiple players - join all names
+    TEAMS[teamId].name = TEAMS[teamId].players.join(', ');
+  }
+  renderTeams(); // Re-render all teams to update names
+}
+
+function removePlayerFromTeam(name, teamId) {
+  TEAMS[teamId].players = TEAMS[teamId].players.filter(playerName => playerName !== name);
+  // Update team name
+  if (TEAMS[teamId].players.length === 0) {
+    // No players left - revert to default team name
+    const defaultNames = ['Team Red', 'Team Blue', 'Team Green', 'Team Yellow', 'Team Purple', 'Team Orange'];
+    TEAMS[teamId].name = defaultNames[teamId];
+  } else {
+    // Still players left - update to show remaining names
+    TEAMS[teamId].name = TEAMS[teamId].players.join(', ');
+  }
+  renderTeams(); // Re-render all teams to update names
 }
 
 function addBuzzerQueueDisplay() {
@@ -395,7 +484,8 @@ function openQuestion(categoryIndex, questionIndex) {
   document.getElementById('answer-section').classList.add('hidden');
   document.getElementById('close-btn').classList.add('hidden');
   
-  document.getElementById('question-modal').classList.remove('hidden');
+  // Reset modal state before opening
+  document.getElementById('question-modal').classList.remove('hidden', 'fade-out');
   
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ 
@@ -410,20 +500,6 @@ function handleAnswerVerified(data) {
   // Show answer section so teacher can manually grade
   document.getElementById('answer-section').classList.remove('hidden');
   document.getElementById('show-answer-btn').classList.add('hidden');
-  document.getElementById('score-buttons').classList.remove('hidden');
-  
-  // Set up score buttons
-  const scoreButtons = document.querySelectorAll('.score-btn');
-  scoreButtons.forEach(btn => {
-    btn.replaceWith(btn.cloneNode(true));
-  });
-  
-  document.querySelectorAll('.score-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const points = parseInt(btn.dataset.points);
-      submitManualScore(data.team, data.player, points);
-    });
-  });
   
   // Show transcript for teacher review
   const answerSection = document.getElementById('answer-section');
@@ -431,63 +507,80 @@ function handleAnswerVerified(data) {
     <h4>Student Answer</h4>
     <p><strong>Player:</strong> ${data.player}</p>
     <p><strong>Response:</strong> ${data.transcript}</p>
-    <p class="manual-grade-prompt">Teacher: Click a score button to grade</p>
-    <div class="score-buttons" id="score-buttons">
-      <button class="score-btn" data-points="100">+100</button>
-      <button class="score-btn" data-points="200">+200</button>
-      <button class="score-btn" data-points="300">+300</button>
-      <button class="score-btn" data-points="400">+400</button>
-      <button class="score-btn" data-points="500">+500</button>
-      <button class="score-btn negative" data-points="-100">-100</button>
-      <button class="score-btn negative" data-points="-200">-200</button>
-      <button class="score-btn negative" data-points="-300">-300</button>
-      <button class="score-btn negative" data-points="-400">-400</button>
-      <button class="score-btn negative" data-points="-500">-500</button>
+  `;
+}
+
+// Explanation Modal Functions
+function openExplanationModal() {
+  explanationMode = true;
+  wrongTeamId = answeringTeam?.id;
+  
+  // Populate the explanation modal with question info
+  document.getElementById('explanation-wrong-team').textContent = answeringTeam?.name || 'Unknown';
+  document.getElementById('explanation-question').textContent = currentQuestion?.question || '';
+  const answers = Array.isArray(currentQuestion?.answer) ? currentQuestion.answer : [currentQuestion?.answer];
+  document.getElementById('explanation-answer').textContent = answers[0] || '';
+  
+  // Reset buzz status display
+  document.getElementById('explanation-buzz-status').innerHTML = '<h3>Waiting for buzz...</h3>';
+  
+  // Show explanation modal and hide question modal
+  document.getElementById('question-modal').classList.add('hidden');
+  document.getElementById('explanation-modal').classList.remove('hidden');
+  
+  // Notify server that explanation round has started
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ 
+      type: 'explanation-start',
+      wrongTeamId: wrongTeamId,
+      questionValue: currentQuestion?.value,
+      categoryIndex: currentQuestion?.categoryIndex,
+      questionIndex: currentQuestion?.questionIndex
+    }));
+  }
+}
+
+function closeExplanationModal() {
+  explanationMode = false;
+  wrongTeamId = null;
+  
+  document.getElementById('explanation-modal').classList.add('hidden');
+  closeModal();
+  
+  // Notify server that explanation round has ended
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'explanation-end' }));
+  }
+}
+
+function updateExplanationBuzz(buzzData) {
+  const statusDiv = document.getElementById('explanation-buzz-status');
+  const team = TEAMS[buzzData.team];
+  
+  statusDiv.innerHTML = `
+    <div class="explanation-buzz-item">
+      <span class="explanation-buzz-team" style="color: ${team.color}">${team.name}</span>
+      <span class="explanation-buzz-player">${buzzData.player} wants to explain!</span>
     </div>
   `;
-  
-  // Re-attach listeners after innerHTML update
-  document.querySelectorAll('.score-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const points = parseInt(btn.dataset.points);
-      submitManualScore(data.team, data.player, points);
-    });
+}
+
+function setupExplanationModalListeners() {
+  document.getElementById('end-explanation-btn').addEventListener('click', () => {
+    closeExplanationModal();
   });
 }
 
-async function submitManualScore(team, player, points) {
-  try {
-    answeringTeam = TEAMS[team];
-    
-    if (points > 0) {
-      answeringTeam.score += points;
-      answeringTeam.streak++;
-      const bonus = checkStreakBonus(answeringTeam);
-      let message = '';
-      if (bonus > 0) {
-        message += ` +$${bonus} streak bonus!`;
-      }
-      updateTeamDisplay(answeringTeam.id);
-      showFeedback(`${player} +$${points}${message}`, '#00ff00');
-    } else {
-      answeringTeam.score += points;
-      answeringTeam.streak = 0;
-      updateTeamDisplay(answeringTeam.id);
-      showFeedback(`${player} $${points}`, '#ff4444');
-    }
-    
-    sendTeamState();
-    if (points > 0) {
-      resetOtherStreaks(team);
-    }
-    
-    // Mark question as answered
-    if (currentQuestion) {
-      markQuestionAnswered();
-    }
-    
-    closeModal();
-  } catch (err) {
-    console.error('Failed to submit score:', err);
+function handleExplanationStarted(data) {
+  // Explanation round has started - other teams can now buzz in
+  console.log('Explanation round started - wrong team:', data.wrongTeamId);
+}
+
+function kickTeam(teamId) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'kick-team',
+      teamId: teamId
+    }));
   }
 }

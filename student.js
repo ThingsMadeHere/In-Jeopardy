@@ -3,8 +3,10 @@ const getWsUrl = () => {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${location.host}`;
 };
+
 const WS_URL = getWsUrl();
 const DEFAULT_ROOM = 'GAME';
+
 let ws = null;
 let currentState = 'waiting';
 let myTeam = null;
@@ -19,7 +21,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function setupJoinScreen() {
   document.getElementById('join-btn').addEventListener('click', joinGame);
-
   document.getElementById('team-name').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') joinGame();
   });
@@ -33,12 +34,10 @@ function setupJoinScreen() {
 
 function joinGame() {
   myName = document.getElementById('team-name').value.trim();
-
   if (!myName) {
     showError('Please enter your name');
     return;
   }
-
   connectWebSocket(DEFAULT_ROOM, myName);
 }
 
@@ -56,8 +55,12 @@ function connectWebSocket(roomCode, name) {
   };
 
   ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    handleMessage(data);
+    try {
+      const data = JSON.parse(event.data);
+      handleMessage(data);
+    } catch (e) {
+      console.error('Failed to parse WebSocket message:', event.data, e);
+    }
   };
 
   ws.onclose = () => {
@@ -66,7 +69,7 @@ function connectWebSocket(roomCode, name) {
     document.getElementById('connection-status').classList.add('disconnected');
   };
 
-  ws.onerror = (err) => {
+  ws.onerror = () => {
     showError('Connection failed. Please try again.');
   };
 }
@@ -78,8 +81,12 @@ const MSG_HANDLERS = {
   'buzz-accepted': (data) => data.player === myName ? showWaitingForAnswer() : lockoutBuzzer(),
   'question-close': () => { resetBuzzer(); },
   'team-state': (data) => updateTeamState(data.teams),
-  'answer-verified': (data) => handleAnswerVerification(data),
-  'answer-graded': (data) => handleAnswerGraded(data)
+  'answer-verified': () => console.log('Waiting for teacher to grade...'),
+  'answer-graded': handleAnswerGraded,
+  'question-max-attempts': () => console.log('Maximum attempts reached - question is now USED'),
+  'kicked': handleKicked,
+  'explanation-start': handleExplanationStart,
+  'explanation-end': handleExplanationEnd
 };
 
 function handleMessage(data) {
@@ -90,28 +97,24 @@ function showGameScreen(data) {
   document.getElementById('join-screen').classList.add('hidden');
   document.getElementById('game-screen').classList.remove('hidden');
   
-  const teamColors = ['Red', 'Blue', 'Green'];
+  const teamColors = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange'];
   document.getElementById('player-info').textContent = `${myName} (${teamColors[myTeam]})`;
   document.getElementById('connection-status').classList.add('connected');
   updateScoreDisplay();
-  
 }
 
 function setState(state) {
-  const states = ['waiting-state', 'buzzing-state', 'lockedout-state', 'recording-state'];
+  const states = ['waiting-state', 'buzzing-state', 'lockedout-state'];
   states.forEach(id => document.getElementById(id).classList.add('hidden'));
   document.getElementById(state).classList.remove('hidden');
 }
 
-function enableBuzzing(data) {
+function enableBuzzing() {
   const buzzer = document.getElementById('buzzer');
   buzzer.classList.remove('locked', 'buzzed');
   buzzer.disabled = false;
   buzzer.querySelector('.buzzer-text').textContent = 'BUZZ!';
   setState('buzzing-state');
-  if (data?.questionValue) {
-    currentQuestionValue = data.questionValue;
-  }
 }
 
 function buzzIn() {
@@ -138,40 +141,52 @@ function showWaitingForAnswer() {
 }
 
 
-function handleAnswerVerification(data) {
-  // Teacher received the answer and will manually grade it
-  const preview = document.getElementById('transcript-preview');
-  preview.textContent = 'Waiting for teacher to grade...';
-  preview.classList.add('has-text');
-}
-
-function handleAnswerGraded(data) {
-  // Notify student of the grading result
-  if (data.player === myName) {
-    const preview = document.getElementById('transcript-preview');
-    if (data.isCorrect) {
-      preview.textContent = `✓ Correct! (+$${data.questionValue})`;
-      preview.style.color = '#00ff00';
-    } else {
-      preview.textContent = `✗ Wrong (-$${data.questionValue})`;
-      preview.style.color = '#ff4444';
-    }
-    
-    // Update score display
-    updateTeamState([{ id: myTeam, score: data.isCorrect ? myTeamScore + data.questionValue : myTeamScore - data.questionValue }]);
-    
-    setTimeout(() => {
-      resetBuzzer();
-      preview.style.color = '';
-    }, 3000);
-  }
-}
-
-function lockoutBuzzer() {
+function lockoutBuzzer(isExplanation = false) {
   const buzzer = document.getElementById('buzzer');
   buzzer.classList.add('locked');
   buzzer.disabled = true;
+  
+  // Show locked out state with appropriate message
   setState('lockedout-state');
+  const lockedText = document.querySelector('#lockedout-state .locked-text');
+  if (lockedText) {
+    lockedText.textContent = isExplanation ? 'Someone buzzed to explain!' : 'Someone buzzed first!';
+  }
+}
+
+function handleExplanationStart(data) {
+  console.log('[EXPLANATION START] Wrong team:', data.wrongTeamId);
+  
+  // Enable buzzing for teams other than the wrong team
+  if (myTeam !== data.wrongTeamId) {
+    enableBuzzing();
+    const buzzer = document.getElementById('buzzer');
+    buzzer.querySelector('.buzzer-text').textContent = 'BUZZ TO EXPLAIN!';
+  } else {
+    // Wrong team cannot buzz - show waiting state with message
+    setState('waiting-state');
+    const waitingText = document.querySelector('#waiting-state .waiting-text');
+    if (waitingText) {
+      waitingText.textContent = 'Waiting for explanation...';
+    }
+    const buzzer = document.getElementById('buzzer');
+    buzzer.disabled = true;
+  }
+}
+
+function handleExplanationEnd(data) {
+  console.log('[EXPLANATION END]');
+  
+  // Reset buzzer state
+  resetBuzzer();
+}
+
+function handleBuzzRejected(data) {
+  console.log('Buzz rejected:', data.reason);
+  const buzzer = document.getElementById('buzzer');
+  buzzer.disabled = false;
+  buzzer.querySelector('.buzzer-text').textContent = 'BUZZ!';
+  setState('buzzing-state');
 }
 
 function resetBuzzer() {
@@ -181,7 +196,6 @@ function resetBuzzer() {
   buzzer.querySelector('.buzzer-text').textContent = 'BUZZ!';
   setState('waiting-state');
 }
-
 
 function updateTeamState(teams) {
   const myTeamData = teams.find(t => t.id === myTeam);
@@ -196,4 +210,3 @@ function updateScoreDisplay() {
   scoreEl.textContent = `$${myTeamScore}`;
   scoreEl.style.color = myTeamScore >= 0 ? '#00ff00' : '#ff4444';
 }
-

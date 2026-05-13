@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Jeopardy!</title>
+  <title>Flash-Jeopardy!</title>
   <link rel="stylesheet" href="common.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>JEOPARDY!</h1>
+      <h1>FLASH-JEOPARDY!</h1>
       <div class="score-board" id="score-board"></div>
     </header>
 
@@ -26,22 +26,33 @@
         <div class="question-text" id="modal-question"></div>
         <div class="answer-section hidden" id="answer-section">
           <div class="answer-text" id="modal-answer"></div>
-          <div class="score-buttons hidden" id="score-buttons">
-            <button class="score-btn" data-points="100">+100</button>
-            <button class="score-btn" data-points="200">+200</button>
-            <button class="score-btn" data-points="300">+300</button>
-            <button class="score-btn" data-points="400">+400</button>
-            <button class="score-btn" data-points="500">+500</button>
-            <button class="score-btn negative" data-points="-100">-100</button>
-            <button class="score-btn negative" data-points="-200">-200</button>
-            <button class="score-btn negative" data-points="-300">-300</button>
-            <button class="score-btn negative" data-points="-400">-400</button>
-            <button class="score-btn negative" data-points="-500">-500</button>
+          <div class="verification-buttons hidden" id="verification-buttons">
+            <button id="mark-correct-btn" class="btn correct">Correct</button>
+            <button id="mark-wrong-btn" class="btn wrong">Wrong</button>
           </div>
         </div>
         <div class="modal-buttons">
           <button id="show-answer-btn" class="btn hidden">Show Answer</button>
           <button id="close-btn" class="btn close hidden">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Explanation Modal -->
+    <div id="explanation-modal" class="modal hidden">
+      <div class="modal-content explanation-content">
+        <h2 class="explanation-title">Explain Why They're Wrong!</h2>
+        <p class="explanation-subtitle">Other teams can buzz in to explain</p>
+        <div class="explanation-info">
+          <p><strong>Team that answered:</strong> <span id="explanation-wrong-team"></span></p>
+          <p><strong>Question:</strong> <span id="explanation-question"></span></p>
+          <p><strong>Correct Answer:</strong> <span id="explanation-answer"></span></p>
+        </div>
+        <div id="explanation-buzz-status" class="explanation-buzz-status">
+          <h3>Waiting for buzz...</h3>
+        </div>
+        <div class="modal-buttons">
+          <button id="end-explanation-btn" class="btn close">End Explanation Round</button>
         </div>
       </div>
     </div>
