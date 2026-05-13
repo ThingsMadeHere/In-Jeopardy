@@ -78,6 +78,7 @@ const MSG_HANDLERS = {
   'join-error': (data) => showError(data.message),
   'question-open': (data) => enableBuzzing(data),
   'buzz-accepted': (data) => data.player === myName ? handleBuzzAccepted(data) : lockoutBuzzer(),
+  'buzz-rejected': (data) => handleBuzzRejected(data),
   'question-close': () => resetBuzzer(),
   'team-state': (data) => updateTeamState(data.teams),
   'answer-verified': (data) => handleAnswerVerification(data),
@@ -193,6 +194,15 @@ function lockoutBuzzer() {
   buzzer.classList.add('locked');
   buzzer.disabled = true;
   setState('lockedout-state');
+}
+
+function handleBuzzRejected(data) {
+  console.log('Buzz rejected:', data.reason);
+  // Re-enable the buzzer so the student can try again if needed
+  const buzzer = document.getElementById('buzzer');
+  buzzer.disabled = false;
+  buzzer.querySelector('.buzzer-text').textContent = 'BUZZ!';
+  setState('buzzing-state');
 }
 
 function resetBuzzer() {

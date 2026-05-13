@@ -218,10 +218,27 @@ function broadcastToRoom(roomCode, message, target = 'all') {
   if (!room) return;
   
   const msg = JSON.stringify(message);
-  const sendIfOpen = (ws) => ws?.readyState === 1 && ws.send(msg);
+  const sendIfOpen = (ws, recipient) => {
+    if (!ws) return;
+    if (ws.readyState !== 1) {
+      console.log(`Cannot send to ${recipient}: readyState=${ws.readyState}`);
+      return;
+    }
+    try {
+      ws.send(msg);
+    } catch (err) {
+      console.error(`Failed to send message to ${recipient}:`, err.message);
+    }
+  };
   
-  if (target !== 'student' && room.teacher) sendIfOpen(room.teacher.ws);
-  if (target !== 'teacher') room.students.forEach(s => sendIfOpen(s.ws));
+  if (target !== 'student' && room.teacher) {
+    sendIfOpen(room.teacher.ws, `teacher-${roomCode}`);
+  }
+  if (target !== 'teacher') {
+    room.students.forEach((s, playerId) => {
+      sendIfOpen(s.ws, `student-${playerId}`);
+    });
+  }
 }
 
 function clearBuzzQueue(roomCode) {
@@ -548,17 +565,43 @@ function handleStudentJoin(data, clientInfo) {
 
 function handleBuzz(data, clientInfo) {
   const room = rooms.get(clientInfo.room);
-  if (!room || room.buzzQueue.find(b => b.team === data.team)) return;
+  
+  // Log buzz attempt for debugging
+  console.log(`Buzz attempt from team ${data.team}, player ${data.player} in room ${clientInfo.room}`);
+  
+  if (!room) {
+    console.log(`Buzz rejected: Room ${clientInfo.room} not found`);
+    send(clientInfo.ws, 'buzz-rejected', { reason: 'Room not found' });
+    return;
+  }
+  
+  // Check if question is open
+  if (!room.currentQuestion) {
+    console.log(`Buzz rejected: No active question`);
+    send(clientInfo.ws, 'buzz-rejected', { reason: 'No active question' });
+    return;
+  }
+  
+  // Check if this team already buzzed
+  const existingBuzz = room.buzzQueue.find(b => b.team === data.team);
+  if (existingBuzz) {
+    console.log(`Buzz rejected: Team ${data.team} already buzzed`);
+    send(clientInfo.ws, 'buzz-rejected', { reason: 'Team already buzzed' });
+    return;
+  }
   
   // Check if this team is disabled for the current question (got it wrong already)
   const questionKey = `${room.currentQuestion?.categoryIndex}-${room.currentQuestion?.questionIndex}`;
   const disabledTeams = room.disabledTeamsPerQuestion.get(questionKey) || new Set();
   if (disabledTeams.has(data.team)) {
-    console.log(`Team ${data.team} is disabled for this question (got it wrong)`);
-    return; // Don't allow buzz from teams that got it wrong
+    console.log(`Buzz rejected: Team ${data.team} is disabled for this question (got it wrong)`);
+    send(clientInfo.ws, 'buzz-rejected', { reason: 'Team disabled for this question' });
+    return;
   }
   
   room.buzzQueue.push({ team: data.team, player: data.player, time: Date.now() });
+  console.log(`Buzz accepted: Team ${data.team}, player ${data.player}, position ${room.buzzQueue.length}`);
+  
   broadcastToRoom(room.code, { 
     type: 'buzz-accepted', 
     team: data.team, 
@@ -674,6 +717,19 @@ function handleMessage(data, clientInfo) {
 wss.on('connection', (ws) => {
   let clientInfo = { ws, role: null, room: null };
 
+  // Add ping/pong for connection health checking
+  const pingInterval = setInterval(() => {
+    if (ws.readyState === 1) {
+      ws.ping();
+    } else {
+      clearInterval(pingInterval);
+    }
+  }, 30000); // Ping every 30 seconds
+  
+  ws.on('pong', () => {
+    // Connection is alive
+  });
+
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message);
@@ -684,9 +740,14 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    clearInterval(pingInterval);
     if (clientInfo.room && clientInfo.role) {
       handleDisconnect(clientInfo);
     }
+  });
+  
+  ws.on('error', (err) => {
+    console.error(`WebSocket error for ${clientInfo.room || 'unknown'} (${clientInfo.role || 'unknown'}):`, err.message);
   });
 });
 
