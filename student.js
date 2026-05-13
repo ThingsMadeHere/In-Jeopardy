@@ -73,7 +73,15 @@ const MSG_HANDLERS = {
   'join-success': (data) => { myTeam = data.team; showGameScreen(data); },
   'join-error': (data) => showError(data.message),
   'question-open': enableBuzzing,
-  'buzz-accepted': (data) => data.player === myName ? handleBuzzAccepted(data) : lockoutBuzzer(data.isExplanation),
+  'buzz-accepted': (data) => {
+    if (data.player === myName) {
+      handleBuzzAccepted(data);
+    } else if (data.isExplanation) {
+      handleExplanationBuzz(data);
+    } else {
+      lockoutBuzzer(false);
+    }
+  },
   'buzz-rejected': handleBuzzRejected,
   'question-close': resetBuzzer,
   'team-state': (data) => updateTeamState(data.teams),
@@ -163,6 +171,20 @@ function handleKicked(data) {
   document.getElementById('team-name').value = '';
   
   showError(data.message || 'You have been removed from the team. Please rejoin.');
+}
+
+function handleExplanationBuzz(data) {
+  console.log('[EXPLANATION BUZZ] Someone else buzzed to explain');
+  const buzzer = document.getElementById('buzzer');
+  buzzer.classList.add('locked');
+  buzzer.disabled = true;
+  
+  // Show locked out state with explanation message
+  setState('lockedout-state');
+  const lockedText = document.querySelector('#lockedout-state .locked-text');
+  if (lockedText) {
+    lockedText.textContent = 'Someone buzzed to explain!';
+  }
 }
 
 function lockoutBuzzer(isExplanation = false) {
