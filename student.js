@@ -13,7 +13,11 @@ let myTeam = null;
 let myName = '';
 let myTeamScore = 0;
 
-document.addEventListener('DOMContentLoaded', setupJoinScreen);
+let currentQuestionValue = 0;
+
+document.addEventListener('DOMContentLoaded', () => {
+  setupJoinScreen();
+});
 
 function setupJoinScreen() {
   document.getElementById('join-btn').addEventListener('click', joinGame);
@@ -21,6 +25,7 @@ function setupJoinScreen() {
     if (e.key === 'Enter') joinGame();
   });
   
+  // Add buzzer event listener
   const buzzer = document.getElementById('buzzer');
   if (buzzer) {
     buzzer.addEventListener('click', buzzIn);
@@ -72,17 +77,9 @@ function connectWebSocket(roomCode, name) {
 const MSG_HANDLERS = {
   'join-success': (data) => { myTeam = data.team; showGameScreen(data); },
   'join-error': (data) => showError(data.message),
-  'question-open': enableBuzzing,
-  'buzz-accepted': (data) => {
-    if (data.player === myName) {
-      handleBuzzAccepted(data);
-    } else {
-      // Someone else buzzed - check if it's an explanation buzz
-      lockoutBuzzer(!!data.isExplanation);
-    }
-  },
-  'buzz-rejected': handleBuzzRejected,
-  'question-close': resetBuzzer,
+  'question-open': (data) => enableBuzzing(data),
+  'buzz-accepted': (data) => data.player === myName ? showWaitingForAnswer() : lockoutBuzzer(),
+  'question-close': () => { resetBuzzer(); },
   'team-state': (data) => updateTeamState(data.teams),
   'answer-verified': () => console.log('Waiting for teacher to grade...'),
   'answer-graded': handleAnswerGraded,
@@ -132,59 +129,17 @@ function buzzIn() {
   document.getElementById('buzzer').disabled = true;
 }
 
-function handleBuzzAccepted() {
-  console.log('Buzz accepted, waiting for teacher...');
+function showWaitingForAnswer() {
+  console.log('Waiting for teacher to input answer...');
+  
   const buzzer = document.getElementById('buzzer');
   buzzer.classList.add('buzzed');
   buzzer.querySelector('.buzzer-text').textContent = 'BUZZED!';
+  
+  // Show waiting state
   setState('waiting-state');
 }
 
-function handleAnswerGraded(data) {
-  if (data.player === myName) {
-    console.log(`Answer graded: ${data.isCorrect ? 'Correct' : 'Wrong'}`);
-    
-    if (!data.isCorrect && data.attempts !== undefined) {
-      const remaining = data.maxAttempts - data.attempts;
-      if (remaining > 0) {
-        console.log(`${remaining} attempt(s) remaining before question becomes USED`);
-      }
-    }
-    
-    setTimeout(resetBuzzer, 3000);
-  }
-}
-
-function handleKicked(data) {
-  if (ws) {
-    ws.close();
-    ws = null;
-  }
-  
-  myTeam = null;
-  myName = '';
-  myTeamScore = 0;
-  
-  document.getElementById('game-screen').classList.add('hidden');
-  document.getElementById('join-screen').classList.remove('hidden');
-  document.getElementById('team-name').value = '';
-  
-  showError(data.message || 'You have been removed from the team. Please rejoin.');
-}
-
-function handleExplanationBuzz(data) {
-  console.log('[EXPLANATION BUZZ] Someone else buzzed to explain');
-  const buzzer = document.getElementById('buzzer');
-  buzzer.classList.add('locked');
-  buzzer.disabled = true;
-  
-  // Show locked out state with explanation message
-  setState('lockedout-state');
-  const lockedText = document.querySelector('#lockedout-state .locked-text');
-  if (lockedText) {
-    lockedText.textContent = 'Someone buzzed to explain!';
-  }
-}
 
 function lockoutBuzzer(isExplanation = false) {
   const buzzer = document.getElementById('buzzer');
