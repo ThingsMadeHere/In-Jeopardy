@@ -15,6 +15,8 @@ const TEAMS = [
 ];
 
 let answeringTeam = null;
+let explanationMode = false;
+let wrongTeamId = null;
 
 const STREAK_THRESHOLDS = [3, 5, 7];
 const STREAK_BONUS_POINTS = { 3: 100, 5: 250, 7: 500 };
@@ -22,6 +24,7 @@ const STREAK_BONUS_POINTS = { 3: 100, 5: 250, 7: 500 };
 document.addEventListener('DOMContentLoaded', () => {
   loadGame();
   setupModalListeners();
+  setupExplanationModalListeners();
   setupWebSocket();
   addBuzzerQueueDisplay();
 });
@@ -176,7 +179,9 @@ function setupModalListeners() {
   
   document.getElementById('mark-wrong-btn').addEventListener('click', () => {
     handleWrongAnswer();
-    closeModal();
+    
+    // Open explanation modal for other teams to buzz in
+    openExplanationModal();
     
     // Send verification to server with questionIndex for attempt tracking
     if (currentQuestion && currentQuestion.questionIndex !== undefined) {
@@ -354,7 +359,9 @@ const WS_HANDLERS = {
   'player-left': (data) => removePlayerFromTeam(data.name, data.team),
   'buzz-queue': (data) => updateBuzzQueue(data.queue),
   'buzz-accepted': (data) => showBuzzNotification(data),
-  'answer-verified': (data) => handleAnswerVerified(data)
+  'answer-verified': (data) => handleAnswerVerified(data),
+  'explanation-buzz': (data) => updateExplanationBuzz(data),
+  'explanation-started': (data) => handleExplanationStarted(data)
 };
 
 function handleWSMessage(data) {
@@ -501,6 +508,72 @@ function handleAnswerVerified(data) {
     <p><strong>Player:</strong> ${data.player}</p>
     <p><strong>Response:</strong> ${data.transcript}</p>
   `;
+}
+
+// Explanation Modal Functions
+function openExplanationModal() {
+  explanationMode = true;
+  wrongTeamId = answeringTeam?.id;
+  
+  // Populate the explanation modal with question info
+  document.getElementById('explanation-wrong-team').textContent = answeringTeam?.name || 'Unknown';
+  document.getElementById('explanation-question').textContent = currentQuestion?.question || '';
+  const answers = Array.isArray(currentQuestion?.answer) ? currentQuestion.answer : [currentQuestion?.answer];
+  document.getElementById('explanation-answer').textContent = answers[0] || '';
+  
+  // Reset buzz status display
+  document.getElementById('explanation-buzz-status').innerHTML = '<h3>Waiting for buzz...</h3>';
+  
+  // Show explanation modal and hide question modal
+  document.getElementById('question-modal').classList.add('hidden');
+  document.getElementById('explanation-modal').classList.remove('hidden');
+  
+  // Notify server that explanation round has started
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ 
+      type: 'explanation-start',
+      wrongTeamId: wrongTeamId,
+      questionValue: currentQuestion?.value,
+      categoryIndex: currentQuestion?.categoryIndex,
+      questionIndex: currentQuestion?.questionIndex
+    }));
+  }
+}
+
+function closeExplanationModal() {
+  explanationMode = false;
+  wrongTeamId = null;
+  
+  document.getElementById('explanation-modal').classList.add('hidden');
+  closeModal();
+  
+  // Notify server that explanation round has ended
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'explanation-end' }));
+  }
+}
+
+function updateExplanationBuzz(buzzData) {
+  const statusDiv = document.getElementById('explanation-buzz-status');
+  const team = TEAMS[buzzData.team];
+  
+  statusDiv.innerHTML = `
+    <div class="explanation-buzz-item">
+      <span class="explanation-buzz-team" style="color: ${team.color}">${team.name}</span>
+      <span class="explanation-buzz-player">${buzzData.player} wants to explain!</span>
+    </div>
+  `;
+}
+
+function setupExplanationModalListeners() {
+  document.getElementById('end-explanation-btn').addEventListener('click', () => {
+    closeExplanationModal();
+  });
+}
+
+function handleExplanationStarted(data) {
+  // Explanation round has started - other teams can now buzz in
+  console.log('Explanation round started - wrong team:', data.wrongTeamId);
 }
 
 function kickTeam(teamId) {
