@@ -37,6 +37,25 @@
         </div>
       </div>
     </div>
+
+    <!-- Explanation Modal -->
+    <div id="explanation-modal" class="modal hidden">
+      <div class="modal-content explanation-content">
+        <h2 class="explanation-title">Explain Why They're Wrong!</h2>
+        <p class="explanation-subtitle">Other teams can buzz in to explain</p>
+        <div class="explanation-info">
+          <p><strong>Team that answered:</strong> <span id="explanation-wrong-team"></span></p>
+          <p><strong>Question:</strong> <span id="explanation-question"></span></p>
+          <p><strong>Correct Answer:</strong> <span id="explanation-answer"></span></p>
+        </div>
+        <div id="explanation-buzz-status" class="explanation-buzz-status">
+          <h3>Waiting for buzz...</h3>
+        </div>
+        <div class="modal-buttons">
+          <button id="end-explanation-btn" class="btn close">End Explanation Round</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="game.js"></script>

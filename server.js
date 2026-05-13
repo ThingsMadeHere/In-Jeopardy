@@ -188,7 +188,9 @@ function createRoom(code) {
     buzzQueue: [],
     currentQuestion: null,
     questionAttempts: new Map(),
-    disabledTeamsPerQuestion: new Map()
+    disabledTeamsPerQuestion: new Map(),
+    explanationMode: false,
+    wrongTeamId: null
   };
 }
 
@@ -698,6 +700,8 @@ const HANDLERS = {
     broadcastToRoom(client.room, { type: 'question-close' }, 'student');
     if (room.teacher) send(room.teacher.ws, 'buzz-queue', { queue: room.buzzQueue });
   },
+  'explanation-start': handleExplanationStart,
+  'explanation-end': handleExplanationEnd,
   'team-state': handleTeamState,
   'broadcast-result': handleBroadcastResult,
   'kick-team': handleKickTeam
