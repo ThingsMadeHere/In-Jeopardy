@@ -76,10 +76,9 @@ const MSG_HANDLERS = {
   'buzz-accepted': (data) => {
     if (data.player === myName) {
       handleBuzzAccepted(data);
-    } else if (data.isExplanation) {
-      handleExplanationBuzz(data);
     } else {
-      lockoutBuzzer(false);
+      // Someone else buzzed - check if it's an explanation buzz
+      lockoutBuzzer(!!data.isExplanation);
     }
   },
   'buzz-rejected': handleBuzzRejected,
@@ -192,15 +191,11 @@ function lockoutBuzzer(isExplanation = false) {
   buzzer.classList.add('locked');
   buzzer.disabled = true;
   
-  if (isExplanation) {
-    // During explanation round, show different message
-    setState('lockedout-state');
-    const lockedText = document.querySelector('#lockedout-state .locked-text');
-    if (lockedText) {
-      lockedText.textContent = 'Someone buzzed to explain!';
-    }
-  } else {
-    setState('lockedout-state');
+  // Show locked out state with appropriate message
+  setState('lockedout-state');
+  const lockedText = document.querySelector('#lockedout-state .locked-text');
+  if (lockedText) {
+    lockedText.textContent = isExplanation ? 'Someone buzzed to explain!' : 'Someone buzzed first!';
   }
 }
 
