@@ -1,1 +1,1 @@
-Nothing should be ignored since only source code files (.js files) are being modified and there are no build artifacts, dependencies, or temporary files in the changes.
+(common.css and game.js are source files, no build artifacts, dependencies, or temp files in the changes)

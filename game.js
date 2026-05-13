@@ -135,7 +135,8 @@ function openQuestion(categoryIndex, questionIndex) {
   document.getElementById('answer-section').classList.add('hidden');
   document.getElementById('close-btn').classList.add('hidden');
   
-  document.getElementById('question-modal').classList.remove('hidden');
+  // Reset modal state before opening
+  document.getElementById('question-modal').classList.remove('hidden', 'fade-out');
 }
 
 function selectAnsweringTeam(teamId) {
@@ -285,18 +286,28 @@ function markQuestionAnswered() {
 }
 
 function closeModal() {
-  document.getElementById('question-modal').classList.add('hidden');
-  document.querySelector('.modal-content').dataset.answeringTeam = '';
-  currentQuestion = null;
-  answeringTeam = null;
+  const modal = document.getElementById('question-modal');
   
-  // Clear local buzz queue immediately to ensure fresh start
-  buzzQueue = [];
-  updateBuzzQueue([]);
+  // Add fade-out class for smooth transition
+  modal.classList.add('fade-out');
   
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'question-close' }));
-  }
+  // Allow transition to complete before hiding and resetting state
+  setTimeout(() => {
+    modal.classList.add('hidden');
+    modal.classList.remove('fade-out');
+    
+    document.querySelector('.modal-content').dataset.answeringTeam = '';
+    currentQuestion = null;
+    answeringTeam = null;
+    
+    // Clear local buzz queue immediately to ensure fresh start
+    buzzQueue = [];
+    updateBuzzQueue([]);
+    
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'question-close' }));
+    }
+  }, 200);
 }
 
 function checkGameComplete() {
@@ -466,7 +477,8 @@ function openQuestion(categoryIndex, questionIndex) {
   document.getElementById('answer-section').classList.add('hidden');
   document.getElementById('close-btn').classList.add('hidden');
   
-  document.getElementById('question-modal').classList.remove('hidden');
+  // Reset modal state before opening
+  document.getElementById('question-modal').classList.remove('hidden', 'fade-out');
   
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ 
