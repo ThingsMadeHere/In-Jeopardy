@@ -72,32 +72,52 @@ const rooms = new Map();
 const defaultGameData = {
   categories: [
     {
-      name: "Plot & Summary",
+      name: "Key Points to Consider",
       questions: [
         { 
           value: 200, 
-          question: "The protagonist's main motivation throughout the essay.", 
-          answer: ["What is reading?", "What is literacy?", "What is learning to read?"] 
+          question: "Alexie's family lives on an Indian ____", 
+          answer: ["What is a reservation?", "What is reservation?"] 
         },
         { 
           value: 400, 
-          question: "Where the protagonist grew up, which shaped his educational experience.", 
-          answer: ["What is a reservation?", "What is the reservation?", "What is an Indian reservation?"] 
+          question: "What the protagonist became professionally, despite never being taught creative writing?", 
+          answer: ["What is a writer?", "What is an author?"] 
         },
         { 
           value: 600, 
-          question: "What the protagonist refused to do, despite expectations placed on him.", 
-          answer: ["What is fail?", "What is to fail?", "What is failing in school?"] 
+          question: "The ultimate purpose behind the protagonist's obsessive reading, stated explicitly in the essay", 
+          answer: ["What is to save his life?", "What is survival?"] 
         },
         { 
           value: 800, 
-          question: "What the protagonist became professionally, despite never being taught creative writing.", 
-          answer: ["What is a writer?", "What is an author?", "What is writing?"] 
+          question: "According to the author, a smart Indian is hated by both white people and____", 
+          answer: ["What are other Indians?", "What is other Indians?"] 
+        },
+      ]
+    },
+    {
+      name: "Narrative Perspectives",
+      questions: [
+        { 
+          value: 200, 
+          question: "Narration by character in story—use of 'I', 'my', 'we'", 
+          answer: ["What is first-person point of view?", "What is 1st person POV?"] 
         },
         { 
-          value: 1000, 
-          question: "The ultimate purpose behind the protagonist's obsessive reading, stated explicitly in the essay.", 
-          answer: ["What is to save his life?", "What is saving his life?", "What is survival?"] 
+          value: 400, 
+          question: "Speaker directly addresses reader—use of 'you'", 
+          answer: ["What is second-person point of view?", "What is 2nd person POV?"] 
+        },
+        { 
+          value: 600, 
+          question: "Speaker is outside of story—describes with 'he/she/they'. Narrator has access to all characters' feelings and thoughts", 
+          answer: ["What is third-person omniscient point of view?", "What is 3rd omniscient POV?"] 
+        },
+        { 
+          value: 800, 
+          question: "Speaker is outside of story—describes with 'he/she/they'. Narrator restricted viewpoint to a single person's inner thoughts", 
+          answer: ["What is third-person limited point of view?", "What is 3rd limited POV?"] 
         },
       ]
     },
@@ -107,12 +127,12 @@ const defaultGameData = {
         { 
           value: 200, 
           question: "This object is what the protagonist says he learned to read with.", 
-          answer: ["What is a Superman comic book?", "What is a comic book?", "What is Superman?"] 
+          answer: ["What is a Superman comic book?", "What is a comic book?"] 
         },
         { 
           value: 400, 
           question: "Complete this quote: 'Despite all the books I read, I am still surprised I became a ______.'", 
-          answer: ["What is writer?", "What is a writer?"] 
+          answer: ["What is writer?", "What is author?"] 
         },
         { 
           value: 600, 
@@ -124,100 +144,30 @@ const defaultGameData = {
           question: "Complete this quote about expectations: 'If he'd been anything but an Indian boy living on a reservation, he might have been called a prodigy. But he is an Indian boy living on a reservation and is simply an ______.'", 
           answer: ["What is oddity?", "What is an oddity?"] 
         },
-        { 
-          value: 1000, 
-          question: "This three-part anaphora appears twice in the essay to describe the protagonist's self-perception.", 
-          answer: ["What is 'I am smart. I am arrogant. I am lucky.'?", "What is 'I was smart. I was arrogant. I was lucky.'?"] 
-        },
       ]
     },
     {
-      name: "Perspective & Voice",
+      name: "Complete this quote",
       questions: [
         { 
           value: 200, 
-          question: "The narrative perspective used throughout the essay.", 
-          answer: ["What is first-person?", "What is first-person point of view?", "What is first-person narration?"] 
+          question: "Complete this quote: 'This knowledge delighted me. I began to think of everything in terms of___. Our reservation was a small____ within the United States'", 
+          answer: ["What is paragraph?", "What is a paragraph?"] 
         },
         { 
           value: 400, 
-          question: "The pronoun the protagonist uses to refer to himself in the opening, creating emotional distance.", 
-          answer: ["What is 'he'?", "What is the third-person pronoun 'he'?"] 
+          question: "'There must have been visiting teachers. Who were they? Where are they now? Do they exist?' The author infers that if one never sees something, one has no idea it ____", 
+          answer: ["What is exists?", "What is exist?"] 
         },
         { 
           value: 600, 
-          question: "The rhetorical shift that occurs in the final paragraph, changing 'my life' to this.", 
-          answer: ["What is 'our lives'?", "What is the collective 'our'?"] 
+          question: "'I was smart. I was arrogant. I was lucky.' The author infers these were key traits for him to____; he argues that education system wants Indians to ____", 
+          answer: ["What is succeed, fail?", "What is to succeed and to fail?"] 
         },
         { 
           value: 800, 
-          question: "This literary device is used when the protagonist says he reads with 'equal parts joy and desperation.'", 
-          answer: ["What is juxtaposition?", "What is contrast?", "What is paradox?"] 
-        },
-        { 
-          value: 1000, 
-          question: "The tone created by the repeated phrase 'Books,' I say to them. 'Books,' I say.", 
-          answer: ["What is urgency?", "What is insistence?", "What is persistence?", "What is a pleading tone?"] 
-        },
-      ]
-    },
-    {
-      name: "Metaphor & Symbolism",
-      questions: [
-        { 
-          value: 200, 
-          question: "Reading is metaphorically described as this life-or-death action.", 
-          answer: ["What is saving a life?", "What is survival?", "What is rescue?"] 
-        },
-        { 
-          value: 400, 
-          question: "The students who refuse to engage are described as having these, which the protagonist tries to break through.", 
-          answer: ["What are locked doors?", "What is a locked door?"] 
-        },
-        { 
-          value: 600, 
-          question: "Empty notebooks and missing pens symbolize this for the defeated students.", 
-          answer: ["What is unrealized potential?", "What is silenced voice?", "What is lost opportunity?"] 
-        },
-        { 
-          value: 800, 
-          question: "The phrase 'throw my weight against their locked doors' uses this type of figurative language.", 
-          answer: ["What is a metaphor?", "What is metaphorical language?"] 
-        },
-        { 
-          value: 1000, 
-          question: "The window that defeated students 'stare out of' symbolizes this.", 
-          answer: ["What is longing for freedom?", "What is desire for escape?", "What is hope for something beyond?", "What is a barrier between inside and outside?"] 
-        },
-      ]
-    },
-    {
-      name: "Themes & Context",
-      questions: [
-        { 
-          value: 200, 
-          question: "This systemic issue explains why Native students were 'expected to be stupid' in the classroom.", 
-          answer: ["What is racism?", "What is discrimination?", "What is educational inequity?", "What is colonialism?"] 
-        },
-        { 
-          value: 400, 
-          question: "The essay critiques this type of education that disconnected Native children from their culture.", 
-          answer: ["What is assimilationist education?", "What is colonial education?", "What is forced assimilation?"] 
-        },
-        { 
-          value: 600, 
-          question: "The protagonist's ability to tell 'complicated stories' at home but be 'monosyllabic' at school illustrates this concept.", 
-          answer: ["What is code-switching?", "What is linguistic code-switching?", "What is cultural code-switching?"] 
-        },
-        { 
-          value: 800, 
-          question: "The essay suggests that the absence of Native writers in the curriculum perpetuates this limiting belief.", 
-          answer: ["What is 'you can't be what you can't see'?", "What is lack of representation?", "What is invisible role models?"] 
-        },
-        { 
-          value: 1000, 
-          question: "The protagonist's return to teach on the reservation represents this broader concept of breaking cycles.", 
-          answer: ["What is intergenerational healing?", "What is giving back?", "What is community responsibility?", "What is decolonizing education?"] 
+          question: "'I throw my weight against their locked doors. The door holds.' The author uses the repeated element of door to allude that he is____", 
+          answer: ["What is Superman?", "What is like Superman?"] 
         },
       ]
     }
@@ -647,6 +597,32 @@ function handleTeamState(data, clientInfo) {
   broadcastToRoom(clientInfo.room, { type: 'team-state', teams: data.teams }, 'student');
 }
 
+function handleKickTeam(data, clientInfo) {
+  if (clientInfo.role !== 'teacher') return;
+  
+  const room = rooms.get(clientInfo.room);
+  if (!room) return;
+  
+  const teamId = data.teamId;
+  const playersToKick = [...room.teams[teamId]];
+  
+  // Remove all players from the team
+  room.teams[teamId] = [];
+  
+  // Remove students from the room and notify them to rejoin
+  playersToKick.forEach(player => {
+    const studentEntry = [...room.students.entries()].find(([_, s]) => s.id === player.id);
+    if (studentEntry) {
+      const [playerId, student] = studentEntry;
+      send(student.ws, 'kicked', { message: 'You have been removed from the team. Please rejoin with a new name.' });
+      room.students.delete(playerId);
+    }
+  });
+  
+  // Update teacher display
+  broadcastToRoom(room.code, { type: 'player-left', name: 'All players', team: teamId }, 'teacher');
+}
+
 function handleDisconnect(clientInfo) {
   const room = rooms.get(clientInfo.room);
   if (!room) return;
@@ -682,9 +658,12 @@ const HANDLERS = {
       room.disabledTeamsPerQuestion.delete(questionKey);
     }
     broadcastToRoom(client.room, { type: 'question-close' }, 'student');
+    // Also send updated (empty) buzz queue to teacher
+    if (room.teacher) send(room.teacher.ws, 'buzz-queue', { queue: room.buzzQueue });
   },
   'team-state': handleTeamState,
-  'broadcast-result': handleBroadcastResult
+  'broadcast-result': handleBroadcastResult,
+  'kick-team': handleKickTeam
 };
 
 function handleMessage(data, clientInfo) {

@@ -77,12 +77,13 @@ const MSG_HANDLERS = {
   'join-success': (data) => { myTeam = data.team; showGameScreen(data); },
   'join-error': (data) => showError(data.message),
   'question-open': (data) => enableBuzzing(data),
-  'buzz-accepted': (data) => data.player === myName ? handleBuzzAccepted(data) : null,
+  'buzz-accepted': (data) => data.player === myName ? handleBuzzAccepted(data) : lockoutBuzzer(),
   'question-close': () => resetBuzzer(),
   'team-state': (data) => updateTeamState(data.teams),
   'answer-verified': (data) => handleAnswerVerification(data),
   'answer-graded': (data) => handleAnswerGraded(data),
-  'question-max-attempts': (data) => handleMaxAttemptsReached(data)
+  'question-max-attempts': (data) => handleMaxAttemptsReached(data),
+  'kicked': (data) => handleKicked(data)
 };
 
 function handleMessage(data) {
@@ -164,6 +165,27 @@ function handleMaxAttemptsReached(data) {
   console.log('Maximum attempts reached - question is now USED');
   // Visual feedback could be added here if needed
   // The board will automatically show USED state when re-rendered
+}
+
+function handleKicked(data) {
+  // Close WebSocket connection
+  if (ws) {
+    ws.close();
+    ws = null;
+  }
+  
+  // Reset state
+  myTeam = null;
+  myName = '';
+  myTeamScore = 0;
+  
+  // Show join screen with message
+  document.getElementById('game-screen').classList.add('hidden');
+  document.getElementById('join-screen').classList.remove('hidden');
+  document.getElementById('team-name').value = '';
+  
+  // Show kick message
+  showError(data.message || 'You have been removed from the team. Please rejoin.');
 }
 
 function lockoutBuzzer() {

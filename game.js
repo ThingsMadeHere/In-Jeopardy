@@ -45,6 +45,7 @@ function renderTeams() {
     const teamDiv = document.createElement('div');
     teamDiv.className = 'team';
     teamDiv.style.borderColor = team.color;
+    
     teamDiv.innerHTML = `
       <div class="team-header">
         <span class="team-name" style="color: ${team.color}">${team.name}</span>
@@ -52,6 +53,9 @@ function renderTeams() {
       </div>
       <div class="team-stats">
         <span class="streak">Streak: <span id="team-streak-${team.id}">${team.streak}</span></span>
+      </div>
+      <div class="team-actions">
+        <button class="kick-btn" onclick="kickTeam(${team.id})" title="Remove team to rejoin with new name">Kick Team</button>
       </div>
     `;
     scoreBoard.appendChild(teamDiv);
@@ -286,6 +290,10 @@ function closeModal() {
   currentQuestion = null;
   answeringTeam = null;
   
+  // Clear local buzz queue immediately to ensure fresh start
+  buzzQueue = [];
+  updateBuzzQueue([]);
+  
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'question-close' }));
   }
@@ -332,6 +340,7 @@ function setupWebSocket() {
 const WS_HANDLERS = {
   'join-success': (data) => { roomCode = data.roomCode; },
   'player-joined': (data) => addPlayerToTeam(data.name, data.team),
+  'player-left': (data) => removePlayerFromTeam(data.name, data.team),
   'buzz-queue': (data) => updateBuzzQueue(data.queue),
   'buzz-accepted': (data) => showBuzzNotification(data),
   'answer-verified': (data) => handleAnswerVerified(data)
@@ -354,7 +363,29 @@ function displayRoomCode(code) {
 
 function addPlayerToTeam(name, teamId) {
   TEAMS[teamId].players.push(name);
-  updateTeamDisplay(teamId);
+  // Update team name to show actual player names
+  if (TEAMS[teamId].players.length === 1) {
+    // First player - set team name to their name
+    TEAMS[teamId].name = name;
+  } else {
+    // Multiple players - join all names
+    TEAMS[teamId].name = TEAMS[teamId].players.join(', ');
+  }
+  renderTeams(); // Re-render all teams to update names
+}
+
+function removePlayerFromTeam(name, teamId) {
+  TEAMS[teamId].players = TEAMS[teamId].players.filter(playerName => playerName !== name);
+  // Update team name
+  if (TEAMS[teamId].players.length === 0) {
+    // No players left - revert to default team name
+    const defaultNames = ['Team Red', 'Team Blue', 'Team Green', 'Team Yellow', 'Team Purple', 'Team Orange'];
+    TEAMS[teamId].name = defaultNames[teamId];
+  } else {
+    // Still players left - update to show remaining names
+    TEAMS[teamId].name = TEAMS[teamId].players.join(', ');
+  }
+  renderTeams(); // Re-render all teams to update names
 }
 
 function addBuzzerQueueDisplay() {
@@ -458,4 +489,13 @@ function handleAnswerVerified(data) {
     <p><strong>Player:</strong> ${data.player}</p>
     <p><strong>Response:</strong> ${data.transcript}</p>
   `;
+}
+
+function kickTeam(teamId) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'kick-team',
+      teamId: teamId
+    }));
+  }
 }
