@@ -590,12 +590,82 @@ function updateExplanationBuzz(buzzData) {
       <span class="explanation-buzz-player">${buzzData.player} wants to explain!</span>
     </div>
   `;
+  
+  // Set the buzzing team as the answering team and show verification buttons
+  answeringTeam = team;
+  document.getElementById('explanation-verification-buttons').classList.remove('hidden');
 }
 
 function setupExplanationModalListeners() {
   document.getElementById('end-explanation-btn').addEventListener('click', () => {
     closeExplanationModal();
   });
+  
+  document.getElementById('mark-explanation-correct-btn').addEventListener('click', () => {
+    handleExplanationCorrect();
+  });
+  
+  document.getElementById('mark-explanation-wrong-btn').addEventListener('click', () => {
+    handleExplanationWrong();
+  });
+}
+
+function handleExplanationCorrect() {
+  if (!answeringTeam) return;
+  
+  // Award the current reward value to the team that explained correctly
+  answeringTeam.score += currentRewardValue;
+  updateTeamDisplay(answeringTeam.id);
+  showFeedback(`${answeringTeam.name} +$${currentRewardValue}`, answeringTeam.color);
+  sendTeamState();
+  
+  // Mark question as answered and close modals
+  markQuestionAnswered();
+  closeExplanationModal();
+  
+  // Send verification to server
+  if (currentQuestion && currentQuestion.questionIndex !== undefined) {
+    fetch('/api/verify-answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        team: answeringTeam.id,
+        player: 'teacher',
+        questionValue: currentRewardValue,
+        isCorrect: true,
+        questionIndex: currentQuestion.questionIndex,
+        isExplanation: true
+      })
+    });
+  }
+}
+
+function handleExplanationWrong() {
+  if (!answeringTeam) return;
+  
+  // Deduct the original question value from the team that explained incorrectly
+  answeringTeam.score -= currentQuestion.value;
+  answeringTeam.streak = 0;
+  updateTeamDisplay(answeringTeam.id);
+  showFeedback(`${answeringTeam.name} -$${currentQuestion.value}`, '#ff4444');
+  sendTeamState();
+  
+  // Halve the reward value for next attempt
+  currentRewardValue = Math.floor(currentRewardValue / 2);
+  document.getElementById('explanation-reward-value').textContent = `$${currentRewardValue}`;
+  
+  // Reset buzz status to allow another team to buzz in
+  document.getElementById('explanation-buzz-status').innerHTML = '<h3>Waiting for buzz...</h3>';
+  document.getElementById('explanation-verification-buttons').classList.add('hidden');
+  
+  // Notify server of wrong explanation
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ 
+      type: 'explanation-wrong',
+      team: answeringTeam.id,
+      currentRewardValue: currentRewardValue
+    }));
+  }
 }
 
 function handleExplanationStarted(data) {

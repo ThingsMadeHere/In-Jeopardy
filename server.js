@@ -731,6 +731,23 @@ function handleExplanationEnd(data, clientInfo) {
   broadcastToRoom(clientInfo.room, { type: 'explanation-end' }, 'student');
 }
 
+function handleExplanationWrong(data, clientInfo) {
+  const room = rooms.get(clientInfo.room);
+  if (!room || clientInfo.role !== 'teacher') return;
+  
+  // Update the current reward value on the server
+  room.currentRewardValue = data.currentRewardValue;
+  
+  console.log(`[EXPLANATION WRONG] Team: ${data.team}, New Reward: $${data.currentRewardValue}`);
+  
+  // Notify teacher about the wrong explanation (optional - for logging)
+  sendToTeacher(clientInfo.room, { 
+    type: 'explanation-wrong',
+    team: data.team,
+    currentRewardValue: data.currentRewardValue
+  });
+}
+
 function handleTeamState(data, clientInfo) {
   if (clientInfo.role !== 'teacher') return;
   broadcastToRoom(clientInfo.room, { type: 'team-state', teams: data.teams }, 'student');
@@ -801,6 +818,7 @@ const HANDLERS = {
   },
   'explanation-start': handleExplanationStart,
   'explanation-end': handleExplanationEnd,
+  'explanation-wrong': handleExplanationWrong,
   'team-state': handleTeamState,
   'broadcast-result': handleBroadcastResult,
   'kick-team': handleKickTeam
