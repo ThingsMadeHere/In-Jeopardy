@@ -15,6 +15,26 @@ let myTeamScore = 0;
 
 let currentQuestionValue = 0;
 
+// Define message handlers before they can be called
+const MSG_HANDLERS = {
+  'join-success': (data) => { myTeam = data.team; showGameScreen(data); },
+  'join-error': (data) => showError(data.message),
+  'question-open': (data) => enableBuzzing(data),
+  'buzz-accepted': (data) => data.player === myName ? showWaitingForAnswer() : lockoutBuzzer(),
+  'question-close': () => { resetBuzzer(); },
+  'team-state': (data) => updateTeamState(data.teams),
+  'answer-verified': () => console.log('Waiting for teacher to grade...'),
+  'answer-graded': handleAnswerGraded,
+  'question-max-attempts': () => console.log('Maximum attempts reached - question is now USED'),
+  'kicked': handleKicked,
+  'explanation-start': handleExplanationStart,
+  'explanation-end': handleExplanationEnd
+};
+
+function handleMessage(data) {
+  MSG_HANDLERS[data.type]?.(data);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   setupJoinScreen();
 });
@@ -72,25 +92,6 @@ function connectWebSocket(roomCode, name) {
   ws.onerror = () => {
     showError('Connection failed. Please try again.');
   };
-}
-
-const MSG_HANDLERS = {
-  'join-success': (data) => { myTeam = data.team; showGameScreen(data); },
-  'join-error': (data) => showError(data.message),
-  'question-open': (data) => enableBuzzing(data),
-  'buzz-accepted': (data) => data.player === myName ? showWaitingForAnswer() : lockoutBuzzer(),
-  'question-close': () => { resetBuzzer(); },
-  'team-state': (data) => updateTeamState(data.teams),
-  'answer-verified': () => console.log('Waiting for teacher to grade...'),
-  'answer-graded': handleAnswerGraded,
-  'question-max-attempts': () => console.log('Maximum attempts reached - question is now USED'),
-  'kicked': handleKicked,
-  'explanation-start': handleExplanationStart,
-  'explanation-end': handleExplanationEnd
-};
-
-function handleMessage(data) {
-  MSG_HANDLERS[data.type]?.(data);
 }
 
 function showGameScreen(data) {
