@@ -4,6 +4,7 @@ let answeredQuestions = new Set();
 let ws = null;
 let roomCode = null;
 let buzzQueue = [];
+let currentRewardValue = null; // Track current reward value during explanation rounds
 
 const TEAMS = [
   { id: 0, name: 'Team Red', color: '#ff4444', score: 0, streak: 0, players: [] },
@@ -366,11 +367,15 @@ const WS_HANDLERS = {
   'join-success': (data) => { roomCode = data.roomCode; },
   'player-joined': (data) => addPlayerToTeam(data.name, data.team),
   'player-left': (data) => removePlayerFromTeam(data.name, data.team),
+  'team-cleared': (data) => clearTeamDisplay(data.team),
   'buzz-queue': (data) => updateBuzzQueue(data.queue),
   'buzz-accepted': (data) => showBuzzNotification(data),
   'answer-verified': (data) => handleAnswerVerified(data),
+  'answer-graded': (data) => handleAnswerGraded(data),
+  'question-max-attempts': (data) => handleMaxAttemptsReached(data),
   'explanation-buzz': (data) => updateExplanationBuzz(data),
-  'explanation-started': (data) => handleExplanationStarted(data)
+  'explanation-started': (data) => handleExplanationStarted(data),
+  'explanation-end': (data) => handleExplanationEnd(data)
 };
 
 function handleWSMessage(data) {
@@ -413,6 +418,14 @@ function removePlayerFromTeam(name, teamId) {
     TEAMS[teamId].name = TEAMS[teamId].players.join(', ');
   }
   renderTeams(); // Re-render all teams to update names
+}
+
+function clearTeamDisplay(teamId) {
+  // Clear all players from the team and reset to default name
+  TEAMS[teamId].players = [];
+  const defaultNames = ['Team Red', 'Team Blue', 'Team Green', 'Team Yellow', 'Team Purple', 'Team Orange'];
+  TEAMS[teamId].name = defaultNames[teamId];
+  renderTeams(); // Re-render all teams to update display
 }
 
 function addBuzzerQueueDisplay() {
@@ -524,11 +537,15 @@ function openExplanationModal() {
   explanationMode = true;
   wrongTeamId = answeringTeam?.id;
   
+  // Calculate reward value - halve the original question value
+  currentRewardValue = Math.floor(currentQuestion.value / 2);
+  
   // Populate the explanation modal with question info
   document.getElementById('explanation-wrong-team').textContent = answeringTeam?.name || 'Unknown';
   document.getElementById('explanation-question').textContent = currentQuestion?.question || '';
   const answers = Array.isArray(currentQuestion?.answer) ? currentQuestion.answer : [currentQuestion?.answer];
   document.getElementById('explanation-answer').textContent = answers[0] || '';
+  document.getElementById('explanation-reward-value').textContent = `$${currentRewardValue}`;
   
   // Reset buzz status display
   document.getElementById('explanation-buzz-status').innerHTML = '<h3>Waiting for buzz...</h3>';
@@ -543,6 +560,7 @@ function openExplanationModal() {
       type: 'explanation-start',
       wrongTeamId: wrongTeamId,
       questionValue: currentQuestion?.value,
+      currentRewardValue: currentRewardValue,
       categoryIndex: currentQuestion?.categoryIndex,
       questionIndex: currentQuestion?.questionIndex
     }));
@@ -583,6 +601,39 @@ function setupExplanationModalListeners() {
 function handleExplanationStarted(data) {
   // Explanation round has started - other teams can now buzz in
   console.log('Explanation round started - wrong team:', data.wrongTeamId);
+}
+
+function handleExplanationEnd(data) {
+  // Explanation round has ended - reset reward value display
+  currentRewardValue = null;
+  console.log('Explanation round ended');
+}
+
+function handleAnswerGraded(data) {
+  // Handle answer grading result from server
+  console.log('Answer graded:', data);
+  
+  if (data.isCorrect) {
+    // Use currentRewardValue for explanation rounds, otherwise use questionValue
+    const points = data.currentRewardValue !== undefined && data.currentRewardValue !== null 
+      ? data.currentRewardValue 
+      : data.questionValue;
+    showFeedback(`${TEAMS[data.team].name} +$${points}`, TEAMS[data.team].color);
+  } else {
+    // Wrong answer during explanation - update reward display
+    if (data.currentRewardValue !== undefined && data.currentRewardValue !== null) {
+      document.getElementById('explanation-reward-value').textContent = `$${data.currentRewardValue}`;
+    }
+    showFeedback(`${TEAMS[data.team].name} -$${data.questionValue}`, '#ff4444');
+  }
+}
+
+function handleMaxAttemptsReached(data) {
+  // Maximum attempts reached - question is now USED
+  console.log('Max attempts reached:', data.message);
+  if (currentQuestion && currentQuestion.questionId) {
+    markQuestionAnswered();
+  }
 }
 
 function kickTeam(teamId) {

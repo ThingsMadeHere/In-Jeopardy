@@ -190,7 +190,8 @@ function createRoom(code) {
     questionAttempts: new Map(),
     disabledTeamsPerQuestion: new Map(),
     explanationMode: false,
-    wrongTeamId: null
+    wrongTeamId: null,
+    currentRewardValue: null
   };
 }
 
@@ -238,6 +239,21 @@ function broadcastToRoom(roomCode, message, target = 'all') {
     room.students.forEach((s, playerId) => {
       sendIfOpen(s.ws, `student-${playerId}`);
     });
+  }
+}
+
+// Send a message only to the teacher
+function sendToTeacher(roomCode, message) {
+  const room = rooms.get(roomCode);
+  if (!room || !room.teacher) return;
+  
+  const ws = room.teacher.ws;
+  if (ws && ws.readyState === 1) {
+    try {
+      ws.send(JSON.stringify(message));
+    } catch (err) {
+      console.error(`Failed to send to teacher:`, err.message);
+    }
   }
 }
 
@@ -381,6 +397,11 @@ app.post('/api/verify-answer', async (req, res) => {
       }
       disabledTeams.add(parseInt(team));
       
+      // Halve the reward value for each wrong attempt
+      if (room.explanationMode && room.currentRewardValue !== null) {
+        room.currentRewardValue = Math.floor(room.currentRewardValue / 2);
+      }
+      
       // Check if max attempts reached - mark as USED
       if (attempts >= MAX_EXPLANATION_ATTEMPTS) {
         broadcastToRoom(room.code, {
@@ -403,6 +424,7 @@ app.post('/api/verify-answer', async (req, res) => {
       player,
       isCorrect,
       questionValue: parseInt(questionValue),
+      currentRewardValue: room.currentRewardValue,
       questionIndex,
       attempts: room.questionAttempts.get(questionIndex) || 0,
       maxAttempts: MAX_EXPLANATION_ATTEMPTS
@@ -680,15 +702,17 @@ function handleExplanationStart(data, clientInfo) {
   
   room.explanationMode = true;
   room.wrongTeamId = data.wrongTeamId;
+  room.currentRewardValue = data.currentRewardValue; // Store current reward value
   room.buzzQueue = []; // Clear buzz queue for explanation round
   
-  console.log(`[EXPLANATION START] Wrong team: ${data.wrongTeamId}`);
+  console.log(`[EXPLANATION START] Wrong team: ${data.wrongTeamId}, Reward: $${data.currentRewardValue}`);
   
   // Notify all students that explanation round has started
   broadcastToRoom(clientInfo.room, { 
     type: 'explanation-start',
     wrongTeamId: data.wrongTeamId,
-    questionValue: data.questionValue
+    questionValue: data.questionValue,
+    currentRewardValue: data.currentRewardValue
   }, 'student');
 }
 
@@ -698,6 +722,7 @@ function handleExplanationEnd(data, clientInfo) {
   
   room.explanationMode = false;
   room.wrongTeamId = null;
+  room.currentRewardValue = null; // Reset reward value
   room.buzzQueue = []; // Clear buzz queue
   
   console.log('[EXPLANATION END]');
@@ -720,6 +745,9 @@ function handleKickTeam(data, clientInfo) {
   const teamId = data.teamId;
   const playersToKick = [...room.teams[teamId]];
   
+  // Store player names before clearing for broadcast
+  const kickedPlayerNames = playersToKick.map(p => p.name);
+  
   room.teams[teamId] = [];
   
   playersToKick.forEach(player => {
@@ -731,7 +759,8 @@ function handleKickTeam(data, clientInfo) {
     }
   });
   
-  broadcastToRoom(room.code, { type: 'player-left', name: 'All players', team: teamId }, 'teacher');
+  // Broadcast team-cleared event to teacher with full team info for visual update
+  sendToTeacher(room.code, { type: 'team-cleared', team: teamId, players: kickedPlayerNames });
 }
 
 function handleDisconnect(clientInfo) {
