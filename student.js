@@ -182,6 +182,24 @@ function handleExplanationEnd(data) {
   resetBuzzer();
 }
 
+function handleAnswerGraded(data) {
+  console.log('Answer graded:', data);
+  // Update score if needed and reset buzzer state
+  if (data.score !== undefined) {
+    myTeamScore = data.score;
+    updateScoreDisplay();
+  }
+  resetBuzzer();
+}
+
+function handleKicked(data) {
+  console.log('You have been kicked from the game:', data.reason);
+  showError(data.reason || 'You have been kicked from the game.');
+  if (ws) {
+    ws.close();
+  }
+}
+
 function handleBuzzRejected(data) {
   console.log('Buzz rejected:', data.reason);
   const buzzer = document.getElementById('buzzer');
