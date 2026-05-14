@@ -28,6 +28,13 @@ body {
   min-width: 150px;
 }
 
+.no-teams-message {
+  color: #888;
+  font-size: 1.1rem;
+  text-align: center;
+  padding: 20px;
+}
+
 .team-header {
   display: flex;
   flex-direction: column;
