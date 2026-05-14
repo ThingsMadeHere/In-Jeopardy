@@ -44,7 +44,16 @@ function renderTeams() {
   const scoreBoard = document.getElementById('score-board');
   scoreBoard.innerHTML = '';
   
-  TEAMS.forEach(team => {
+  // Only render teams that have at least one player
+  const activeTeams = TEAMS.filter(team => team.players.length > 0);
+  
+  if (activeTeams.length === 0) {
+    // Show placeholder message when no teams have joined yet
+    scoreBoard.innerHTML = '<div class="no-teams-message">Waiting for teams to join...</div>';
+    return;
+  }
+  
+  activeTeams.forEach(team => {
     const teamDiv = document.createElement('div');
     teamDiv.className = 'team';
     teamDiv.style.borderColor = team.color;
